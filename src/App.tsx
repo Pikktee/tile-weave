@@ -2,7 +2,7 @@ import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId
 import {
   CircleHelp,
   Download,
-  History,
+  GitBranch,
   Layers3,
   Lightbulb,
   Minus,
@@ -34,7 +34,8 @@ type Version = {
   image: string;
   settings: PatternSettings;
   prompt: string;
-  createdAt: string;
+  seed?: number;
+  note: string;
 };
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
@@ -97,17 +98,26 @@ const initialSettings: PatternSettings = {
   colors: palettes[1],
 };
 
-const formatTime = () =>
-  new Intl.DateTimeFormat('de-DE', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date());
-
 const downloadImage = (imageUrl: string, filename: string) => {
   const link = document.createElement('a');
   link.href = imageUrl;
   link.download = filename;
   link.click();
+};
+
+const readJsonResponse = async (response: Response) => {
+  const text = await response.text();
+  if (!text.trim()) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      response.ok
+        ? 'Die Antwort des Servers war unlesbar.'
+        : `Der Server antwortete nicht mit lesbaren Bilddaten (${response.status}).`,
+    );
+  }
 };
 
 
@@ -629,12 +639,10 @@ function App() {
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [showNewIdeaConfirm, setShowNewIdeaConfirm] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
-  const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [refinementInput, setRefinementInput] = useState('');
   const [offsetX, setOffsetX] = useState(50);
   const [offsetY, setOffsetY] = useState(50);
   const fabricSelectPointerFocusRef = useRef(false);
-  const promptHistoryRef = useRef<HTMLDivElement>(null);
 
   const hasTile = Boolean(tileImage);
   const showGarmentControl = viewMode === 'kleidung';
@@ -830,7 +838,6 @@ function App() {
     setPreviewTool('pan');
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
-    setPromptHistory([]);
     setRefinementInput('');
     setOffsetX(50);
     setOffsetY(50);
@@ -846,10 +853,12 @@ function App() {
 
   const generateWithAi = async (
     mode: GenerationMode,
-    options?: { promptOverride?: string; historyEntry?: string; emphasis?: string },
+    options?: { promptOverride?: string; versionNote?: string; emphasis?: string },
   ) => {
     const requestPrompt = (options?.promptOverride ?? prompt).trim();
     const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
+    const activeVersion = versions.find((version) => version.id === activeVersionId);
+    const stableSeed = mode === 'initial' && options?.emphasis ? activeVersion?.seed : undefined;
     const requestBody = {
       prompt: requestPrompt,
       ...(mode === 'refine'
@@ -864,6 +873,7 @@ function App() {
       changeStrength: settings.changeStrength,
       mode,
       referenceImage,
+      ...(typeof stableSeed === 'number' ? { seed: stableSeed } : {}),
     };
 
     setGenerationMode(mode);
@@ -876,10 +886,13 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
       if (!response.ok || !data.imageUrl) {
-        throw new Error(data.error || 'Keine Bilddaten erhalten.');
+        const fallback = response.ok
+          ? 'Keine Bilddaten erhalten.'
+          : `Der Bildserver ist nicht erreichbar oder antwortete leer (${response.status}).`;
+        throw new Error(data.error || fallback);
       }
 
       const nextVersionId = crypto.randomUUID();
@@ -903,15 +916,15 @@ function App() {
       setVersions((current) => [
         {
           id: nextVersionId,
-          name: current.length === 0 ? 'Grundmuster' : `Verfeinerung ${current.length}`,
+          name: `Version ${current.length + 1}`,
           image: data.imageUrl,
           settings: nextSettings,
           prompt: requestPrompt,
-          createdAt: formatTime(),
+          seed: typeof data.seed === 'number' ? data.seed : stableSeed,
+          note: options?.versionNote?.trim() ?? '',
         },
         ...current,
       ]);
-      setPromptHistory((current) => [...current, options?.historyEntry ?? requestPrompt]);
       setMessage(`Stoffmuster wurde erzeugt. ${paletteMessage}`);
     } catch (error) {
       setMessage(
@@ -927,12 +940,13 @@ function App() {
   const handleRefinementPrompt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const addition = refinementInput.trim();
-    if (!addition || isGenerating) return;
-    const base = prompt.trim();
-    const combined = base ? `${base}, ${addition}` : addition;
-    setPrompt(combined);
+    if (isGenerating) return;
     setRefinementInput('');
-    void generateWithAi('initial', { promptOverride: combined, historyEntry: addition, emphasis: addition });
+    void generateWithAi('initial', {
+      promptOverride: prompt,
+      ...(addition ? { versionNote: addition } : {}),
+      ...(addition ? { emphasis: addition } : {}),
+    });
   };
 
   const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1045,19 +1059,12 @@ function App() {
             onRemoveColor={removeColor}
           />
 
-          <div className="refinement-block">
+          <div className="refinement-block new-version-block">
             <div className="label-row">
               <span>
-                <Sparkles size={16} />
-                Prompt-Verlauf
+                <GitBranch size={16} />
+                Neue Version erzeugen
               </span>
-            </div>
-            <div className="prompt-history" ref={promptHistoryRef} aria-label="Bisherige Prompts">
-              {promptHistory.map((p, i) => (
-                <p key={i} className="prompt-history__entry">
-                  {p}
-                </p>
-              ))}
             </div>
             <form className="prompt-chat-form" onSubmit={handleRefinementPrompt}>
               <textarea
@@ -1070,23 +1077,23 @@ function App() {
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
-                placeholder="Ergänzung zum Prompt …"
+                placeholder="Optionale Ergänzung für die nächste Version …"
                 rows={2}
                 disabled={isGenerating}
-                aria-label="Prompt erweitern"
+                aria-label="Optionale Prompt-Ergänzung für neue Version"
               />
               <button
                 className="ghost-button prompt-chat-send"
                 type="submit"
-                disabled={!refinementInput.trim() || isGenerating}
-                aria-label="Prompt anwenden"
+                disabled={isGenerating}
+                aria-label="Neue Version erzeugen"
               >
                 <SendHorizontal size={16} />
-                Prompt anwenden
+                Version erzeugen
               </button>
             </form>
             <p className="prompt-chat-hint">
-              Eine konkrete Änderung pro Eingabe wirkt am stärksten. Jede Anwendung erzeugt eine neue Kachel.
+              Eine konkrete Ergänzung pro Version wirkt am stärksten. Leer absenden erzeugt eine freie Variante.
             </p>
           </div>
 
@@ -1282,12 +1289,12 @@ function App() {
           {isGenerating && <LoadingOverlay mode={generationMode} />}
         </section>
 
-        <aside className="panel versions-panel" aria-label="Verlauf">
+        <aside className="panel versions-panel" aria-label="Versionen">
           <div className="panel-heading">
             <span className="panel-heading__badge" aria-hidden="true">
-              <History size={18} />
+              <GitBranch size={18} />
             </span>
-            <h2 className="panel-heading__title">Verlauf</h2>
+            <h2 className="panel-heading__title">Versionen</h2>
           </div>
 
           <div className="versions">
@@ -1302,7 +1309,7 @@ function App() {
                 <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
                 <span>
                   <strong>{version.name}</strong>
-                  <small>{version.createdAt}</small>
+                  {version.note && <small>{version.note}</small>}
                 </span>
               </button>
             ))}

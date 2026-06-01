@@ -198,6 +198,11 @@ textarea:focus-visible {
   background: rgba(200, 195, 188, 0.35);
 }
 
+.top-actions .ghost-button,
+.prompt-chat-send {
+  font-weight: 400;
+}
+
 .icon-button {
   width: 40px;
   padding: 0;
@@ -614,6 +619,10 @@ input[type="range"] {
   padding-top: 4px;
 }
 
+.new-version-block {
+  margin-top: auto;
+}
+
 .prompt-box label {
   color: var(--muted);
   font-size: 0.9rem;
@@ -846,35 +855,6 @@ input[type="range"] {
 .control--disabled {
   opacity: 0.38;
   pointer-events: none;
-}
-
-.prompt-history {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 140px;
-  overflow-y: auto;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--paper-dark, rgba(25, 23, 22, 0.04));
-  border: 1px solid var(--line);
-}
-
-.prompt-history:empty {
-  display: none;
-}
-
-.prompt-history__entry {
-  margin: 0;
-  font-size: 0.84rem;
-  color: var(--ink);
-  line-height: 1.45;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.prompt-history__entry:last-child {
-  border-bottom: none;
 }
 
 .prompt-chat-form {
@@ -1622,9 +1602,10 @@ input[type="range"] {
 
 .versions button {
   display: grid;
-  grid-template-columns: 52px 1fr;
+  grid-template-columns: 52px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 7px;
@@ -1650,11 +1631,16 @@ input[type="range"] {
 .versions strong,
 .versions small {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .versions small {
   margin-top: 3px;
   color: var(--muted);
+  line-height: 1.35;
 }
 
 @media (max-width: 1180px) {

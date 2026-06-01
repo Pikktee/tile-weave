@@ -109,6 +109,17 @@ const extractFalError = (data, status) => {
   return data?.error || `fal.ai konnte kein Muster erzeugen (${status}).`;
 };
 
+const readFalJson = async (response) => {
+  const text = await response.text();
+  if (!text.trim()) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`fal.ai antwortete nicht mit lesbarem JSON (${response.status}).`);
+  }
+};
+
 app.post('/api/generate-pattern', async (req, res) => {
   const apiKey = process.env.FAL_KEY;
 
@@ -127,9 +138,12 @@ app.post('/api/generate-pattern', async (req, res) => {
     mode = 'initial',
     emphasis,
     referenceImage,
+    seed,
   } = req.body ?? {};
 
   try {
+    const requestedSeed = Number(seed);
+    const stableSeed = Number.isInteger(requestedSeed) ? requestedSeed : null;
     const palette = Array.isArray(colors) ? colors.slice(0, 6) : [];
     const requestedColorCount = Number(colorCount);
     const paletteSize = Number.isFinite(requestedColorCount)
@@ -203,6 +217,7 @@ app.post('/api/generate-pattern', async (req, res) => {
       // sync_mode liefert das Bild direkt als Data-URI zurück, damit Farbanalyse
       // und PNG-Export im Frontend ohne Cross-Origin-Probleme funktionieren.
       sync_mode: true,
+      ...(stableSeed !== null ? { seed: stableSeed } : {}),
       ...(isRefinement
         ? {
             image_url: referenceImage,
@@ -220,7 +235,7 @@ app.post('/api/generate-pattern', async (req, res) => {
       body: JSON.stringify(input),
     });
 
-    const data = await response.json();
+    const data = await readFalJson(response);
 
     if (!response.ok) {
       res.status(response.status).json({ error: extractFalError(data, response.status) });
@@ -238,6 +253,7 @@ app.post('/api/generate-pattern', async (req, res) => {
       imageUrl,
       model: FAL_MODEL,
       modelName: 'Z-Image Turbo (Seamless Tiling)',
+      seed: typeof data?.seed === 'number' ? data.seed : stableSeed,
       note: '',
     });
   } catch (error) {
