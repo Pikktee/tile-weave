@@ -1,6 +1,5 @@
 import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useState } from 'react';
 import {
-  ArrowLeftRight,
   CircleHelp,
   Download,
   History,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react';
 
 type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
-type CompareViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 
 type PatternSettings = {
   density: number;
@@ -39,7 +37,7 @@ type Version = {
   createdAt: string;
 };
 
-type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel' | 'vergleich';
+type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 type GenerationMode = 'initial' | 'refine';
 type PanZoomState = {
   x: number;
@@ -51,12 +49,11 @@ type PreviewTool = 'pan' | 'zoom' | null;
 const minColorCount = 2;
 const maxColorCount = 6;
 const fabricWidthCm = 150;
-const fabricVisibleLengthCm = 200;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
 
 const minPreviewZoom = 0.5;
 const maxPreviewZoom = 2.5;
-const previewZoomStep = 0.1;
+const previewZoomStep = 0.2;
 const initialPanZoom: PanZoomState = { x: 0, y: 0, zoom: 1 };
 
 const palettes = [
@@ -304,51 +301,44 @@ function FabricPreview({
   repeatSize: number;
   compact?: boolean;
 }) {
-  const verticalMarks = [0, 50, 100, 150, 200];
-  const horizontalMarks = [0, 50, 100, 150];
+  const rulerMarks = Array.from({ length: 31 }, (_, index) => index);
+  const getRulerPosition = (mark: number) => {
+    if (mark === 0) return '24px';
+    if (mark === 30) return 'calc(100% - 24px)';
+    return `${(mark / 30) * 100}%`;
+  };
 
   return (
     <div className={compact ? 'fabric-measure compact' : 'fabric-measure'}>
-      <div className="fabric-ruler vertical" aria-hidden="true">
-        {verticalMarks.map((mark) => (
-          <span
-            key={mark}
-            style={{
-              top:
-                mark === 0
-                  ? '10px'
-                  : mark === fabricVisibleLengthCm
-                    ? 'calc(100% - 10px)'
-                    : `${(mark / fabricVisibleLengthCm) * 100}%`,
-            }}
-          >
-            {mark === 200 ? '2,0 m' : `${mark} cm`}
-          </span>
-        ))}
-      </div>
+      {!compact && (
+        <div className="fabric-ruler vertical" aria-hidden="true">
+          {rulerMarks.map((mark) => (
+            <span
+              className={mark % 5 === 0 ? 'major' : 'minor'}
+              key={mark}
+              style={{ bottom: getRulerPosition(mark) }}
+            >
+              {mark % 5 === 0 && <strong>{mark}</strong>}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="fabric-roll" style={makeFabricStyle(image, repeatSize)}>
         <div className="fabric-shadow" />
       </div>
-      <div className="fabric-ruler horizontal" aria-hidden="true">
-        {horizontalMarks.map((mark) => (
-          <span
-            key={mark}
-            style={{
-              left:
-                mark === 0
-                  ? '18px'
-                  : mark === fabricWidthCm
-                    ? 'calc(100% - 18px)'
-                    : `${(mark / fabricWidthCm) * 100}%`,
-            }}
-          >
-            {mark} cm
-          </span>
-        ))}
-      </div>
-      <p className="fabric-scale-note">
-        Maßband-Simulation: {fabricWidthCm} cm Stoffbreite, 2,0 m Ansichts-Länge
-      </p>
+      {!compact && (
+        <div className="fabric-ruler horizontal" aria-hidden="true">
+          {rulerMarks.map((mark) => (
+            <span
+              className={mark % 5 === 0 ? 'major' : 'minor'}
+              key={mark}
+              style={{ left: getRulerPosition(mark) }}
+            >
+              {mark % 5 === 0 && <strong>{mark}</strong>}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -572,60 +562,24 @@ function GarmentPreview({
   );
 }
 
-function VersionMeta({ version }: { version?: Version }) {
-  if (!version) return null;
-
-  return (
-    <div className="version-meta">
-      <div>
-        <strong>{version.name}</strong>
-        <small>{version.createdAt}</small>
-      </div>
-      <div className="meta-swatches" aria-label={`Palette von ${version.name}`}>
-        {version.settings.colors.map((color) => (
-          <span key={`${version.id}-${color}`} style={{ background: color }} />
-        ))}
-      </div>
-      <dl>
-        <div>
-          <dt>Musterfülle</dt>
-          <dd>{version.settings.density}</dd>
-        </div>
-        <div>
-          <dt>Farbwirkung</dt>
-          <dd>{version.settings.colorStrength}</dd>
-        </div>
-        <div>
-          <dt>Rapport</dt>
-          <dd>{formatRapportSize(version.settings.repeatSize)}</dd>
-        </div>
-      </dl>
-    </div>
-  );
-}
-
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
   const [viewMode, setViewMode] = useState<ViewMode>('stoffbahn');
-  const [compareViewMode, setCompareViewMode] = useState<CompareViewMode>('stoffbahn');
   const [garmentType, setGarmentType] = useState<GarmentType>('kleid');
   const [tileImage, setTileImage] = useState('');
   const [prompt, setPrompt] = useState('');
   const [versions, setVersions] = useState<Version[]>([]);
   const [activeVersionId, setActiveVersionId] = useState('');
-  const [compareAId, setCompareAId] = useState('');
-  const [compareBId, setCompareBId] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>('initial');
   const [message, setMessage] = useState('Idee eingeben und erstes Stoffmuster erzeugen.');
   const [previewTransform, setPreviewTransform] = useState<PanZoomState>(initialPanZoom);
-  const [previewTool, setPreviewTool] = useState<PreviewTool>(null);
+  const [previewTool, setPreviewTool] = useState<PreviewTool>('pan');
+  const [isAltPressed, setIsAltPressed] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
 
   const hasTile = Boolean(tileImage);
-  const compareA = versions.find((version) => version.id === compareAId) || versions[1] || versions[0];
-  const compareB = versions.find((version) => version.id === compareBId) || versions[0] || compareA;
-  const showGarmentControl = viewMode === 'kleidung' || (viewMode === 'vergleich' && compareViewMode === 'kleidung');
+  const showGarmentControl = viewMode === 'kleidung';
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
 
@@ -644,6 +598,26 @@ function App() {
   const resetPreviewTransform = () => {
     setPreviewTransform(initialPanZoom);
   };
+
+  useEffect(() => {
+    const handleAltDown = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') setIsAltPressed(true);
+    };
+    const handleAltUp = (event: KeyboardEvent) => {
+      if (event.key === 'Alt') setIsAltPressed(false);
+    };
+    const resetAltState = () => setIsAltPressed(false);
+
+    window.addEventListener('keydown', handleAltDown);
+    window.addEventListener('keyup', handleAltUp);
+    window.addEventListener('blur', resetAltState);
+
+    return () => {
+      window.removeEventListener('keydown', handleAltDown);
+      window.removeEventListener('keyup', handleAltUp);
+      window.removeEventListener('blur', resetAltState);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -774,17 +748,14 @@ function App() {
     setTileImage('');
     setVersions([]);
     setActiveVersionId('');
-    setCompareAId('');
-    setCompareBId('');
     setViewMode('stoffbahn');
-    setCompareViewMode('stoffbahn');
+    setPreviewTool('pan');
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
   };
 
   const generateWithAi = async (mode: GenerationMode) => {
     const requestPrompt = prompt.trim();
-    const previousActiveId = activeVersionId;
     const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
     const requestBody = {
       prompt: requestPrompt,
@@ -835,8 +806,6 @@ function App() {
       setSettings(nextSettings);
       setTileImage(data.imageUrl);
       setActiveVersionId(nextVersionId);
-      setCompareAId(mode === 'refine' && previousActiveId ? previousActiveId : nextVersionId);
-      setCompareBId(nextVersionId);
       setVersions((current) => [
         {
           id: nextVersionId,
@@ -865,28 +834,6 @@ function App() {
     if (!isGenerating && prompt.trim().length >= 8) {
       void generateWithAi('initial');
     }
-  };
-
-  const renderComparePane = (version: Version | undefined, side: 'A' | 'B') => {
-    const image = version?.image || tileImage;
-
-    return (
-      <article className="compare-pane">
-        <span className="compare-label">Version {side}</span>
-        {compareViewMode === 'kachel' && (
-          <div className="compare-tile">
-            <img src={image} alt={`Musterkachel Version ${side}`} />
-          </div>
-        )}
-        {compareViewMode === 'stoffbahn' && (
-          <FabricPreview image={image} repeatSize={settings.repeatSize} compact />
-        )}
-        {compareViewMode === 'kleidung' && (
-          <GarmentPreview image={image} repeatSize={settings.repeatSize} garmentType={garmentType} compact />
-        )}
-        <VersionMeta version={version} />
-      </article>
-    );
   };
 
   if (!hasTile) {
@@ -946,7 +893,6 @@ function App() {
             ['stoffbahn', Ruler, 'Stoffbahn'],
             ['kleidung', Shirt, 'Kleidung'],
             ['kachel', Layers3, 'Kachel'],
-            ['vergleich', ArrowLeftRight, 'Vergleich'],
           ].map(([mode, Icon, label]) => (
             <button
               key={mode as string}
@@ -1047,19 +993,6 @@ function App() {
 
         <section className="preview-stage" aria-live="polite">
           <div className="preview-header">
-            <div>
-              <h2>
-                {viewMode === 'kachel'
-                  ? 'Kachel prüfen'
-                  : viewMode === 'stoffbahn'
-                    ? 'Rapport auf Fläche'
-                    : viewMode === 'kleidung'
-                      ? 'Kleidung und Objekt'
-                      : 'Versionen vergleichen'}
-              </h2>
-              <small>Hand mit H, Zoom mit Z. Alt-Klick zoomt heraus, 0 setzt die Ansicht zurück.</small>
-            </div>
-
             <div className="preview-tools">
               <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
                 <button
@@ -1124,47 +1057,6 @@ function App() {
                 </button>
               </div>
 
-              {viewMode === 'vergleich' && (
-                <div className="compare-tools">
-                  <label>
-                    Version A
-                    <select value={compareA?.id || ''} onChange={(event) => setCompareAId(event.target.value)}>
-                      {versions.map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {version.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Version B
-                    <select value={compareB?.id || ''} onChange={(event) => setCompareBId(event.target.value)}>
-                      {versions.map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {version.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="segmented compact-segmented" aria-label="Vergleichsansicht">
-                    {[
-                      ['stoffbahn', 'Stoffbahn'],
-                      ['kleidung', 'Kleidung'],
-                      ['kachel', 'Kachel'],
-                    ].map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        className={compareViewMode === mode ? 'active' : ''}
-                        type="button"
-                        onClick={() => setCompareViewMode(mode as CompareViewMode)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {showGarmentControl && (
                 <div className="garment-picker" aria-label="Anwendung wählen">
                   {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
@@ -1184,7 +1076,7 @@ function App() {
           </div>
 
           <div
-            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}`}
+            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${panStart ? ' is-panning' : ''}`}
             onPointerDown={startPreviewInteraction}
             onPointerMove={movePreviewPan}
             onPointerUp={stopPreviewPan}
@@ -1230,12 +1122,6 @@ function App() {
                 </div>
               )}
 
-              {viewMode === 'vergleich' && (
-                <div className="compare-view">
-                  {renderComparePane(compareA, 'A')}
-                  {renderComparePane(compareB, 'B')}
-                </div>
-              )}
             </div>
           </div>
 
