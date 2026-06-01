@@ -71,9 +71,9 @@ fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/tur
 Aktuelle Reglerlogik:
 
 - Die KI-Mustersteuerung laeuft ueber den Prompt-Chat, nicht ueber Regler. `Musterfuelle` (`density`), `Farbwirkung` (`colorStrength`) und `Entwurfsabstand` (`changeStrength`) sind aus der UI entfernt, weil sie beim Refinement keine verlaessliche Wirkung hatten. Sie existieren weiter in `PatternSettings` und werden mit Default-Werten gesendet; der Server schreibt `density`/`colorStrength` nur dann in den Prompt, wenn der Wert klar vom Neutralbereich abweicht.
-- Die drei Ansichts-Regler sind rein CSS-basiert und nur in der Stoffbahn-Ansicht aktiv (in anderen Ansichten ausgegraut/`disabled`):
-  - `Rapportmass` (`repeatSize`): aendert `background-size`, erzeugt keine neue Kachel; Anzeige in cm/m.
-  - `Horizontaler Versatz` (`offsetX`, 0-100) und `Vertikaler Versatz` (`offsetY`, 0-100): aendern `background-position-x/y` in `makeFabricStyle`, um das Muster in der Stoffbahn zu verschieben. Reiner Vorschau-Effekt, kein KI-Signal.
+- Die drei Ansichts-Regler sind rein CSS- bzw. SVG-basiert:
+  - `Rapportmass` (`repeatSize`): aendert die Kachel- bzw. Rapportgroesse (in Stoffbahn- und Kleidung-Ansicht aktiv). Erzeugt keine neue Kachel; Anzeige in cm/m.
+  - `Horizontaler Versatz` (`offsetX`, 0-100) und `Vertikaler Versatz` (`offsetY`, 0-100): aendern `background-position-x/y` in `makeFabricStyle`, um das Muster in der Stoffbahn zu verschieben. Reiner Vorschau-Effekt, kein KI-Signal. Nur in der Stoffbahn-Ansicht aktiv.
 - `scale`/`Motivgroesse` ist vollstaendig entfernt; das Feld wird im Payload toleriert, aber serverseitig nicht mehr ausgewertet.
 
 Nicht wieder als Regler einfuehren, solange sie nicht wirklich sinnvoll mit KI-Bildgenerierung verbunden sind:

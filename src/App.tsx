@@ -5,14 +5,12 @@ import {
   GitBranch,
   Layers3,
   Lightbulb,
-  Minus,
   Move,
-  Palette,
-  Plus,
   RotateCcw,
   Ruler,
   SendHorizontal,
   Shirt,
+  SlidersHorizontal,
   Sparkles,
   Wand2,
   ZoomIn,
@@ -50,18 +48,34 @@ type FabricSize = {
   width: number;
   height: number;
 };
+type ImageAdjustmentSettings = {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+};
 
 const minColorCount = 2;
 const maxColorCount = 6;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
 const fabricWidthOptions = [50, 100, 150, 200, 250, 300];
-const fabricHeightOptions = [70, 90, 110, 140, 150];
-const initialFabricSize: FabricSize = { width: 150, height: 110 };
+const fabricHeightOptions = [70, 90, 100, 110, 140, 150];
+const initialFabricSize: FabricSize = { width: 150, height: 100 };
 
 const minPreviewZoom = 0.5;
-const maxPreviewZoom = 2.5;
+const maxPreviewZoom = 4.0;
 const previewZoomStep = 0.2;
 const initialPanZoom: PanZoomState = { x: 0, y: 0, zoom: 1 };
+const initialImageAdjustments: ImageAdjustmentSettings = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+};
+const newVersionTooltip =
+  'Erzeugt aus deinem bisherigen Musterwunsch und dieser Ergänzung eine weitere KI-Kachel. Die aktuelle Kachel wird nicht punktgenau übermalt: Motive, Farben und Anordnung können sich neu mischen, und sehr genaue Einzelkorrekturen sind nicht garantiert. Ohne Text entsteht eine freie Variante.';
+const imageSettingsTooltip =
+  'Verändert nur die Darstellung in den Ansichten. Die erzeugte KI-Kachel, Versionen und Prompt-Daten bleiben unverändert.';
+const viewSettingsTooltip =
+  'Steuert, wie die Kachel in der Stoffbahn-Vorschau liegt und wiederholt wird. Das ändert keine KI-Datei und ist nicht druckverbindlich.';
 
 const palettes = [
   ['#F45B69', '#21A8A3'],
@@ -243,20 +257,34 @@ const makeFabricStyle = (
   fabricWidth: number,
   offsetX = 50,
   offsetY = 50,
+  imageFilter?: string,
 ): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
   backgroundSize: `${(repeatSize / fabricWidth) * 100}% auto`,
   backgroundPositionX: `${offsetX}%`,
   backgroundPositionY: `${offsetY}%`,
+  filter: imageFilter,
 });
 
-const makeTileStyle = (image: string): CSSProperties => ({
+const makeTileStyle = (image: string, imageFilter?: string): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
+  filter: imageFilter,
 });
 
 const formatRapportSize = (value: number) =>
   value >= 100 ? `${(value / 100).toFixed(1).replace('.', ',')} m` : `${value} cm`;
 
+const formatImageAdjustment = (value: number) => {
+  if (value === 0) return 'Neutral';
+
+  return `${value > 0 ? '+' : ''}${value}%`;
+};
+
+const makeImageAdjustmentFilter = ({ brightness, contrast, saturation }: ImageAdjustmentSettings) => {
+  if (brightness === 0 && contrast === 0 && saturation === 0) return undefined;
+
+  return `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturation}%)`;
+};
 
 const clampPreviewZoom = (value: number) =>
   Math.max(minPreviewZoom, Math.min(maxPreviewZoom, Number(value.toFixed(2))));
@@ -330,9 +358,9 @@ function Slider({
             </span>
           )}
         </span>
-        <strong>
+        <span className="control-value">
           {valueFormatter ? valueFormatter(value) : `${value}${unit ?? ''}`}
-        </strong>
+        </span>
       </span>
       <input
         type="range"
@@ -353,6 +381,7 @@ function FabricPreview({
   fabricSize,
   offsetX = 50,
   offsetY = 50,
+  imageFilter,
   compact = false,
 }: {
   image: string;
@@ -360,6 +389,7 @@ function FabricPreview({
   fabricSize: FabricSize;
   offsetX?: number;
   offsetY?: number;
+  imageFilter?: string;
   compact?: boolean;
 }) {
   const verticalMarks = makeRulerMarks(fabricSize.height);
@@ -384,7 +414,11 @@ function FabricPreview({
           ))}
         </div>
       )}
-      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize, fabricSize.width, offsetX, offsetY)}>
+      <div className="fabric-roll">
+        <div
+          className="fabric-pattern-layer"
+          style={makeFabricStyle(image, repeatSize, fabricSize.width, offsetX, offsetY, imageFilter)}
+        />
         <div className="fabric-shadow" />
       </div>
       {!compact && (
@@ -464,74 +498,17 @@ function PromptInput({
   );
 }
 
-function CompactPalette({
-  colors,
-  onColorChange,
-  onAddColor,
-  onRemoveColor,
-}: {
-  colors: string[];
-  onColorChange: (index: number, color: string) => void;
-  onAddColor: () => void;
-  onRemoveColor: (index: number) => void;
-}) {
-  return (
-    <div className="swatch-block compact-swatch">
-      <div className="label-row">
-        <span>
-          <Palette size={16} />
-          Farben
-        </span>
-      </div>
-      <div className="compact-palette-row" aria-label="Farbpalette">
-        {colors.map((color, index) => (
-          <div className="compact-swatch-wrap" key={`${color}-${index}`}>
-            <label
-              className="compact-swatch-btn"
-              style={{ background: color }}
-              aria-label={`Farbe ${index + 1}: ${color}`}
-            >
-              <input
-                type="color"
-                value={color}
-                onChange={(event) => onColorChange(index, event.target.value)}
-              />
-            </label>
-            <button
-              className="compact-swatch-remove"
-              type="button"
-              onClick={() => onRemoveColor(index)}
-              disabled={colors.length <= minColorCount}
-              aria-label={`Farbe ${index + 1} entfernen`}
-            >
-              <Minus size={9} />
-            </button>
-          </div>
-        ))}
-        {colors.length < maxColorCount && (
-          <button
-            className="compact-swatch-add"
-            type="button"
-            onClick={onAddColor}
-            aria-label="Farbe hinzufügen"
-          >
-            <Plus size={16} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function GarmentPreview({
   image,
   repeatSize,
   garmentType,
+  imageFilter,
   compact = false,
 }: {
   image: string;
   repeatSize: number;
   garmentType: GarmentType;
+  imageFilter?: string;
   compact?: boolean;
 }) {
   const rawPatternId = useId();
@@ -543,7 +520,13 @@ function GarmentPreview({
   const patternDefs = (
     <defs>
       <pattern id={patternId} width={tileSize} height={tileSize} patternUnits="userSpaceOnUse">
-        <image href={image} width={tileSize} height={tileSize} preserveAspectRatio="xMidYMid slice" />
+        <image
+          href={image}
+          width={tileSize}
+          height={tileSize}
+          preserveAspectRatio="xMidYMid slice"
+          style={imageFilter ? { filter: imageFilter } : undefined}
+        />
       </pattern>
       <linearGradient id={`${patternId}-soft-light`} x1="0" x2="1" y1="0" y2="0">
         <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
@@ -552,6 +535,23 @@ function GarmentPreview({
       </linearGradient>
     </defs>
   );
+
+  const getTransform = () => {
+    switch (garmentType) {
+      case 'hemd':
+        return 'translate(210, 280) scale(1.13) translate(-210, -307.5)';
+      case 'kleid':
+        return 'translate(210, 280) scale(1.04) translate(-210, -307)';
+      case 'rock':
+        return 'translate(210, 280) scale(1.03) translate(-210, -315)';
+      case 'schal':
+        return 'translate(210, 280) scale(0.88) translate(-210, -282.5)';
+      case 'kissen':
+        return 'translate(210, 280) scale(1.28) translate(-210, -235)';
+      default:
+        return undefined;
+    }
+  };
 
   const renderGarment = () => {
     switch (garmentType) {
@@ -579,26 +579,28 @@ function GarmentPreview({
       case 'rock':
         return (
           <>
-            <path className="garment-fill" d="M145 110 L275 110 L338 520 Q210 548 82 520 Z" fill={patternFill} />
-            <path className="garment-fill garment-band" d="M138 82 H282 Q292 82 292 94 V128 H128 V94 Q128 82 138 82 Z" fill={patternFill} />
-            <path className="garment-detail" d="M128 128 H292 M145 110 C154 230 137 384 104 520 M210 128 V536 M275 110 C266 230 283 384 316 520" />
-            <path className="garment-shade" d="M145 110 L275 110 L338 520 Q210 548 82 520 Z" fill={shadeFill} />
+            <path className="garment-fill" d="M 150 120 Q 210 130 270 120 Q 285 300 330 500 C 320 520, 280 520, 270 500 C 260 485, 240 485, 230 500 C 220 520, 200 520, 190 500 C 180 485, 160 485, 150 500 C 140 520, 100 520, 90 500 Q 135 300 150 120 Z" fill={patternFill} />
+            <path className="garment-fill garment-band" d="M 150 90 Q 210 100 270 90 L 270 120 Q 210 130 150 120 Z" fill={patternFill} />
+            <path className="garment-detail" d="M 150 120 Q 210 130 270 120 M 180 126 Q 165 300 150 500 M 240 126 Q 255 300 270 500 M 210 128 Q 200 300 190 500 M 160 123 Q 135 300 110 500 M 260 123 Q 285 300 310 500" />
+            <path className="garment-shade" d="M 150 120 Q 210 130 270 120 Q 285 300 330 500 C 320 520, 280 520, 270 500 C 260 485, 240 485, 230 500 C 220 520, 200 520, 190 500 C 180 485, 160 485, 150 500 C 140 520, 100 520, 90 500 Q 135 300 150 120 Z M 150 90 Q 210 100 270 90 L 270 120 Q 210 130 150 120 Z" fill={shadeFill} />
           </>
         );
       case 'schal':
         return (
           <>
-            <path className="garment-fill" d="M154 28 Q228 10 278 58 L252 535 Q202 555 142 514 Z" fill={patternFill} />
-            <path className="garment-detail" d="M154 28 Q205 64 278 58 M142 514 Q198 486 252 535" />
-            <path className="garment-shade" d="M154 28 Q228 10 278 58 L252 535 Q202 555 142 514 Z" fill={shadeFill} />
+            <path className="garment-fill" d="M 220 160 L 260 140 Q 275 320 250 515 L 210 505 Q 225 320 220 160 Z" fill={patternFill} />
+            <path className="garment-fill" d="M 170 150 Q 195 160 220 170 Q 210 320 220 485 L 180 495 Q 170 320 170 150 Z" fill={patternFill} />
+            <path className="garment-fill" d="M 150 120 C 150 65, 270 65, 270 120 C 270 165, 150 165, 150 120 Z M 180 120 C 180 135, 240 135, 240 120 C 240 90, 180 90, 180 120 Z" fill={patternFill} />
+            <path className="garment-detail" d="M 180 160 Q 210 165 240 160 M 195 165 Q 190 320 200 480 M 225 160 Q 235 320 230 510 M 185 486 v 15 M 190 487 v 15 M 195 487 v 15 M 200 488 v 15 M 205 488 v 15 M 210 487 v 15 M 215 486 v 15 M 220 485 v 15 M 215 507 v 15 M 220 509 v 15 M 225 510 v 15 M 230 512 v 15 M 235 513 v 15 M 240 514 v 15 M 245 515 v 15 M 250 515 v 15" />
+            <path className="garment-shade" d="M 150 120 C 150 65, 270 65, 270 120 C 270 165, 150 165, 150 120 Z M 180 120 C 180 135, 240 135, 240 120 C 240 90, 180 90, 180 120 Z M 220 160 L 260 140 Q 275 320 250 515 L 210 505 Q 225 320 220 160 Z M 170 150 Q 195 160 220 170 Q 210 320 220 485 L 180 495 Q 170 320 170 150 Z" fill={shadeFill} />
           </>
         );
       case 'kissen':
         return (
           <>
-            <rect className="garment-fill" x="70" y="95" width="280" height="280" rx="42" fill={patternFill} />
-            <path className="garment-detail" d="M94 122 Q210 85 326 122 M94 348 Q210 385 326 348 M96 128 Q62 235 96 342 M324 128 Q358 235 324 342" />
-            <path className="garment-shade" d="M70 95 H350 V375 H70 Z" fill={shadeFill} />
+            <path className="garment-fill" d="M 90 115 C 150 90, 270 90, 330 115 C 355 175, 355 295, 330 355 C 270 380, 150 380, 90 355 C 65 295, 65 175, 90 115 Z" fill={patternFill} />
+            <path className="garment-detail" d="M 90 115 Q 115 135 135 150 M 90 115 Q 105 140 120 160 M 330 115 Q 305 135 285 150 M 330 115 Q 315 140 300 160 M 330 355 Q 305 335 285 320 M 330 355 Q 315 330 300 310 M 90 355 Q 115 335 135 320 M 90 355 Q 105 330 120 310 M 160 235 Q 210 245 260 235 M 210 185 Q 215 235 210 285" />
+            <path className="garment-shade" d="M 90 115 C 150 90, 270 90, 330 115 C 355 175, 355 295, 330 355 C 270 380, 150 380, 90 355 C 65 295, 65 175, 90 115 Z" fill={shadeFill} />
           </>
         );
       default:
@@ -615,7 +617,9 @@ function GarmentPreview({
         aria-label={`${garmentTypes[garmentType].label} mit aktuellem Muster`}
       >
         {patternDefs}
-        {renderGarment()}
+        <g transform={getTransform()}>
+          {renderGarment()}
+        </g>
       </svg>
     </div>
   );
@@ -640,6 +644,7 @@ function App() {
   const [showNewIdeaConfirm, setShowNewIdeaConfirm] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
   const [refinementInput, setRefinementInput] = useState('');
+  const [imageAdjustments, setImageAdjustments] = useState<ImageAdjustmentSettings>(initialImageAdjustments);
   const [offsetX, setOffsetX] = useState(50);
   const [offsetY, setOffsetY] = useState(50);
   const fabricSelectPointerFocusRef = useRef(false);
@@ -648,6 +653,7 @@ function App() {
   const showGarmentControl = viewMode === 'kleidung';
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
+  const imageFilter = makeImageAdjustmentFilter(imageAdjustments);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -792,35 +798,8 @@ function App() {
     setPanStart(null);
   };
 
-  const updateColor = (index: number, color: string) => {
-    setSettings((current) => ({
-      ...current,
-      colors: current.colors.map((currentColor, colorIndex) =>
-        colorIndex === index ? color.toUpperCase() : currentColor,
-      ),
-    }));
-  };
-
-  const addColor = () => {
-    setSettings((current) => {
-      if (current.colors.length >= maxColorCount) return current;
-
-      return {
-        ...current,
-        colors: [...current.colors, colorSuggestions[current.colors.length] || '#F4EFE6'],
-      };
-    });
-  };
-
-  const removeColor = (index: number) => {
-    setSettings((current) => {
-      if (current.colors.length <= minColorCount) return current;
-
-      return {
-        ...current,
-        colors: current.colors.filter((_, colorIndex) => colorIndex !== index),
-      };
-    });
+  const updateImageAdjustment = (key: keyof ImageAdjustmentSettings, value: number) => {
+    setImageAdjustments((current) => ({ ...current, [key]: value }));
   };
 
   const restoreVersion = (version: Version) => {
@@ -839,6 +818,7 @@ function App() {
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
     setRefinementInput('');
+    setImageAdjustments(initialImageAdjustments);
     setOffsetX(50);
     setOffsetY(50);
   };
@@ -897,12 +877,11 @@ function App() {
 
       const nextVersionId = crypto.randomUUID();
       let extractedColors = settings.colors;
-      let paletteMessage = 'Die Arbeits-Palette wurde aus der Kachel übernommen.';
 
       try {
         extractedColors = await extractDominantPalette(data.imageUrl);
       } catch {
-        paletteMessage = 'Die automatische Farbanalyse war nicht möglich; die Palette bleibt editierbar.';
+        extractedColors = settings.colors;
       }
 
       const nextSettings = {
@@ -925,7 +904,7 @@ function App() {
         },
         ...current,
       ]);
-      setMessage(`Stoffmuster wurde erzeugt. ${paletteMessage}`);
+      setMessage('Stoffmuster wurde erzeugt.');
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -1052,49 +1031,43 @@ function App() {
             <h1 className="panel-heading__title">Anpassungen</h1>
           </div>
 
-          <CompactPalette
-            colors={settings.colors}
-            onColorChange={updateColor}
-            onAddColor={addColor}
-            onRemoveColor={removeColor}
-          />
-
-          <div className="refinement-block new-version-block">
+          <div className="refinement-block image-settings-block">
             <div className="label-row">
               <span>
-                <GitBranch size={16} />
-                Neue Version erzeugen
+                <SlidersHorizontal size={16} />
+                Bildeinstellungen
+                <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={imageSettingsTooltip}>
+                  <CircleHelp size={14} />
+                  <span className="control-tooltip-popup" role="tooltip">
+                    {imageSettingsTooltip}
+                  </span>
+                </span>
               </span>
             </div>
-            <form className="prompt-chat-form" onSubmit={handleRefinementPrompt}>
-              <textarea
-                className="prompt-chat-input"
-                value={refinementInput}
-                onChange={(event) => setRefinementInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder="Optionale Ergänzung für die nächste Version …"
-                rows={2}
-                disabled={isGenerating}
-                aria-label="Optionale Prompt-Ergänzung für neue Version"
-              />
-              <button
-                className="ghost-button prompt-chat-send"
-                type="submit"
-                disabled={isGenerating}
-                aria-label="Neue Version erzeugen"
-              >
-                <SendHorizontal size={16} />
-                Version erzeugen
-              </button>
-            </form>
-            <p className="prompt-chat-hint">
-              Eine konkrete Ergänzung pro Version wirkt am stärksten. Leer absenden erzeugt eine freie Variante.
-            </p>
+            <Slider
+              label="Helligkeit"
+              value={imageAdjustments.brightness}
+              min={-50}
+              max={50}
+              valueFormatter={formatImageAdjustment}
+              onChange={(value) => updateImageAdjustment('brightness', value)}
+            />
+            <Slider
+              label="Kontrast"
+              value={imageAdjustments.contrast}
+              min={-50}
+              max={50}
+              valueFormatter={formatImageAdjustment}
+              onChange={(value) => updateImageAdjustment('contrast', value)}
+            />
+            <Slider
+              label="Sättigung"
+              value={imageAdjustments.saturation}
+              min={-50}
+              max={50}
+              valueFormatter={formatImageAdjustment}
+              onChange={(value) => updateImageAdjustment('saturation', value)}
+            />
           </div>
 
           <div className="refinement-block">
@@ -1102,6 +1075,12 @@ function App() {
               <span>
                 <Ruler size={16} />
                 Ansicht
+                <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={viewSettingsTooltip}>
+                  <CircleHelp size={14} />
+                  <span className="control-tooltip-popup" role="tooltip">
+                    {viewSettingsTooltip}
+                  </span>
+                </span>
               </span>
             </div>
             <Slider
@@ -1109,9 +1088,9 @@ function App() {
               value={settings.repeatSize}
               min={6}
               max={120}
-              hint="Vorschau-Maß pro Kachel – nur in der Stoffbahn-Ansicht aktiv."
+              hint="Vorschau-Maß pro Kachel – in der Stoffbahn- und Kleidung-Ansicht aktiv."
               valueFormatter={formatRapportSize}
-              disabled={viewMode !== 'stoffbahn'}
+              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
               onChange={(value) => updateSetting('repeatSize', value)}
             />
             <Slider
@@ -1133,6 +1112,26 @@ function App() {
 
         <section className="preview-stage" aria-live="polite">
           <div className="preview-header">
+            <h2 className="preview-title">
+              {viewMode === 'kachel' && (
+                <>
+                  <Layers3 size={22} />
+                  <span>Kachel</span>
+                </>
+              )}
+              {viewMode === 'stoffbahn' && (
+                <>
+                  <Ruler size={22} />
+                  <span>Stoffbahn</span>
+                </>
+              )}
+              {viewMode === 'kleidung' && (
+                <>
+                  <Shirt size={22} />
+                  <span>Kleidung</span>
+                </>
+              )}
+            </h2>
             <div className="preview-tools">
               {viewMode === 'stoffbahn' && (
                 <div className="fabric-size-picker" aria-label="Bahnmaß wählen">
@@ -1258,13 +1257,25 @@ function App() {
             >
               {viewMode === 'stoffbahn' && (
                 <div className="fabric-view">
-                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} fabricSize={fabricSize} offsetX={offsetX} offsetY={offsetY} />
+                  <FabricPreview
+                    image={tileImage}
+                    repeatSize={settings.repeatSize}
+                    fabricSize={fabricSize}
+                    offsetX={offsetX}
+                    offsetY={offsetY}
+                    imageFilter={imageFilter}
+                  />
                 </div>
               )}
 
               {viewMode === 'kleidung' && (
                 <div className="garment-view">
-                  <GarmentPreview image={tileImage} repeatSize={settings.repeatSize} garmentType={garmentType} />
+                  <GarmentPreview
+                    image={tileImage}
+                    repeatSize={settings.repeatSize}
+                    garmentType={garmentType}
+                    imageFilter={imageFilter}
+                  />
                 </div>
               )}
 
@@ -1273,12 +1284,18 @@ function App() {
                   <article className="tile-card">
                     <h3 className="tile-card-label">Originalkachel</h3>
                     <div className="tile-focus">
-                      <img src={tileImage} alt="Originale quadratische Musterkachel" />
+                      <img
+                        src={tileImage}
+                        alt="Originale quadratische Musterkachel"
+                        style={imageFilter ? { filter: imageFilter } : undefined}
+                      />
                     </div>
                   </article>
                   <article className="tile-card">
                     <h3 className="tile-card-label">Nahtprüfung</h3>
-                    <div className="tile-repeat-grid" style={makeTileStyle(tileImage)} />
+                    <div className="tile-repeat-grid">
+                      <span className="tile-repeat-pattern" style={makeTileStyle(tileImage, imageFilter)} />
+                    </div>
                   </article>
                 </div>
               )}
@@ -1295,6 +1312,47 @@ function App() {
               <GitBranch size={18} />
             </span>
             <h2 className="panel-heading__title">Versionen</h2>
+          </div>
+
+          <div className="refinement-block new-version-block">
+            <div className="label-row">
+              <span>
+                <Wand2 size={16} />
+                Neue Version erzeugen
+                <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={newVersionTooltip}>
+                  <CircleHelp size={14} />
+                  <span className="control-tooltip-popup" role="tooltip">
+                    {newVersionTooltip}
+                  </span>
+                </span>
+              </span>
+            </div>
+            <form className="prompt-chat-form" onSubmit={handleRefinementPrompt}>
+              <textarea
+                className="prompt-chat-input"
+                value={refinementInput}
+                onChange={(event) => setRefinementInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder="Optionale Zusatzbeschreibung für die nächste Version..."
+                rows={2}
+                disabled={isGenerating}
+                aria-label="Optionale Prompt-Ergänzung für neue Version"
+              />
+              <button
+                className="ghost-button prompt-chat-send"
+                type="submit"
+                disabled={isGenerating}
+                aria-label="Neue Version erzeugen"
+              >
+                <SendHorizontal size={16} />
+                Version erzeugen
+              </button>
+            </form>
           </div>
 
           <div className="versions">
