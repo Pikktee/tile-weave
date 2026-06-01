@@ -1160,10 +1160,10 @@ input[type="range"] {
 
 .fabric-ruler {
   position: relative;
-  color: var(--ink);
+  color: rgba(80, 70, 60, 0.55);
   background: transparent;
   font-size: clamp(0.72rem, 1vw, 0.95rem);
-  font-weight: 650;
+  font-weight: 550;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -1188,7 +1188,7 @@ input[type="range"] {
 .fabric-ruler.vertical span {
   right: 8px;
   width: 23px;
-  border-top: 2px solid rgba(25, 23, 22, 0.92);
+  border-top: 2px solid rgba(80, 70, 60, 0.45);
   transform: translateY(-50%);
 }
 
@@ -1208,7 +1208,7 @@ input[type="range"] {
 .fabric-ruler.horizontal span {
   top: 6px;
   height: 23px;
-  border-left: 2px solid rgba(25, 23, 22, 0.92);
+  border-left: 2px solid rgba(80, 70, 60, 0.45);
   transform: translateX(-50%);
 }
 
