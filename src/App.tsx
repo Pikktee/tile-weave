@@ -3,6 +3,8 @@ import {
   CircleHelp,
   Download,
   GitBranch,
+  Grid,
+  Image as ImageIcon,
   Layers3,
   Lightbulb,
   Move,
@@ -1282,17 +1284,28 @@ function App() {
               {viewMode === 'kachel' && (
                 <div className="tile-view">
                   <article className="tile-card">
-                    <h3 className="tile-card-label">Originalkachel</h3>
+                    <div className="tile-card-header">
+                      <div className="tile-card-badge">
+                        <ImageIcon size={16} strokeWidth={2.5} />
+                        <span className="tile-card-title">Originalkachel</span>
+                      </div>
+                    </div>
                     <div className="tile-focus">
                       <img
                         src={tileImage}
                         alt="Originale quadratische Musterkachel"
+                        draggable={false}
                         style={imageFilter ? { filter: imageFilter } : undefined}
                       />
                     </div>
                   </article>
                   <article className="tile-card">
-                    <h3 className="tile-card-label">Nahtprüfung</h3>
+                    <div className="tile-card-header">
+                      <div className="tile-card-badge">
+                        <Grid size={16} strokeWidth={2.5} />
+                        <span className="tile-card-title">Nahtprüfung</span>
+                      </div>
+                    </div>
                     <div className="tile-repeat-grid">
                       <span className="tile-repeat-pattern" style={makeTileStyle(tileImage, imageFilter)} />
                     </div>

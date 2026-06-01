@@ -1266,7 +1266,7 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1278,11 +1278,44 @@ input[type="range"] {
   flex: 1;
 }
 
-.tile-card-label {
-  margin: 0;
-  font-size: 1rem;
-  text-align: center;
-  color: var(--muted);
+.tile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  margin-bottom: 0;
+}
+
+.tile-card-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(33, 168, 163, 0.08);
+  color: var(--teal);
+}
+
+.tile-card-badge::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 22px;
+  width: 0;
+  height: 10px;
+  border-left: 1px dashed rgba(33, 168, 163, 0.45);
+  pointer-events: none;
+}
+
+.tile-card-title {
+  font-size: 0.94rem;
+  font-weight: 550;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .tile-focus,
@@ -1290,6 +1323,7 @@ input[type="range"] {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(25, 23, 22, 0.18);
+  border-radius: 0;
   box-shadow: 0 26px 50px rgba(43, 33, 30, 0.16);
 }
 
@@ -1307,6 +1341,8 @@ input[type="range"] {
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  user-select: none;
 }
 
 .tile-repeat-grid {
