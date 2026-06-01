@@ -539,8 +539,7 @@ function GarmentPreview({
         return (
           <>
             <path className="garment-fill" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={patternFill} />
-            <path className="garment-cutout" d="M180 96 Q210 137 240 96 L252 96 Q239 155 210 164 Q181 155 168 96 Z" />
-            <path className="garment-detail" d="M132 135 L168 96 M288 135 L252 96 M210 162 L210 520 M130 240 L130 520 M290 240 L290 520" />
+            <path className="garment-detail" d="M132 135 L168 96 M288 135 L252 96 M210 96 L210 520 M130 240 L130 520 M290 240 L290 520" />
             <path className="garment-shade" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={shadeFill} />
             {[215, 255, 295, 335].map((cy) => (
               <circle key={cy} className="garment-button" cx="210" cy={cy} r="4" />
@@ -553,8 +552,7 @@ function GarmentPreview({
             <path className="garment-fill" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={patternFill} />
             <path className="garment-fill" d="M154 126 C105 138 78 181 82 234 C112 242 142 223 158 190 Z" fill={patternFill} />
             <path className="garment-fill" d="M266 126 C315 138 342 181 338 234 C308 242 278 223 262 190 Z" fill={patternFill} />
-            <path className="garment-cutout" d="M177 104 Q210 147 243 104 Q232 165 210 173 Q188 165 177 104 Z" />
-            <path className="garment-detail" d="M132 228 L288 228 M160 245 C190 270 230 270 260 245 M160 245 L116 538 M210 248 L210 538 M260 245 L304 538" />
+            <path className="garment-detail" d="M132 228 L288 228 M160 245 C190 270 230 270 260 245 M160 245 L116 538 M210 90 L210 538 M260 245 L304 538" />
             <path className="garment-shade" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={shadeFill} />
           </>
         );
@@ -606,7 +604,7 @@ function GarmentPreview({
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
   const [viewMode, setViewMode] = useState<ViewMode>('kachel');
-  const [garmentType, setGarmentType] = useState<GarmentType>('kleid');
+  const [garmentType, setGarmentType] = useState<GarmentType>('hemd');
   const [tileImage, setTileImage] = useState('');
   const [prompt, setPrompt] = useState('');
   const [versions, setVersions] = useState<Version[]>([]);
@@ -976,7 +974,7 @@ function App() {
             Neue Idee
           </button>
           <button
-            className="primary-button"
+            className="ghost-button"
             type="button"
             onClick={() => downloadImage(tileImage, 'tile-weave-musterkachel.png')}
             disabled={!hasTile}
