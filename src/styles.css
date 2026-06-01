@@ -436,23 +436,26 @@ textarea:focus-visible {
 
 .panel-heading {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.panel-heading.compact {
   align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--line);
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--coral);
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.panel-heading__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: rgba(25, 23, 22, 0.6);
+}
+
+.panel-heading__title {
+  margin: 0;
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 h1,
@@ -1823,4 +1826,79 @@ input[type="range"] {
   to {
     background-position: -220% 0;
   }
+}
+
+/* Bestätigungs-Dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 22, 15, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.confirm-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 32px;
+  max-width: 380px;
+  width: calc(100% - 40px);
+  box-shadow: 0 8px 32px rgba(30, 22, 15, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-dialog #confirm-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.confirm-dialog .confirm-body {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.confirm-actions .primary-button {
+  background: var(--coral);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.confirm-actions .primary-button:hover {
+  opacity: 0.88;
+}
+
+.confirm-actions .ghost-button {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.confirm-actions .ghost-button:hover {
+  background: var(--surface-raised);
 }

@@ -617,6 +617,7 @@ function App() {
   const [fabricSize, setFabricSize] = useState<FabricSize>(initialFabricSize);
   const [pointerFocusedFabricSelect, setPointerFocusedFabricSelect] = useState<keyof FabricSize | null>(null);
   const [isAltPressed, setIsAltPressed] = useState(false);
+  const [showNewIdeaConfirm, setShowNewIdeaConfirm] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
   const fabricSelectPointerFocusRef = useRef(false);
 
@@ -816,6 +817,14 @@ function App() {
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
   };
 
+  const handleNewIdeaClick = () => {
+    if (versions.length > 0 || tileImage) {
+      setShowNewIdeaConfirm(true);
+    } else {
+      resetToStart();
+    }
+  };
+
   const generateWithAi = async (mode: GenerationMode) => {
     const requestPrompt = prompt.trim();
     const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
@@ -969,7 +978,7 @@ function App() {
         </nav>
 
         <div className="top-actions">
-          <button className="ghost-button" type="button" onClick={resetToStart} disabled={isGenerating}>
+          <button className="ghost-button" type="button" onClick={handleNewIdeaClick} disabled={isGenerating}>
             <Lightbulb size={17} />
             Neue Idee
           </button>
@@ -988,10 +997,10 @@ function App() {
       <section className="workspace">
         <aside className="panel controls-panel" aria-label="Stoffmuster verfeinern">
           <div className="panel-heading">
-            <div>
-              <h1>Muster anpassen</h1>
-            </div>
-            <Sparkles size={22} />
+            <span className="panel-heading__badge" aria-hidden="true">
+              <Sparkles size={18} />
+            </span>
+            <h1 className="panel-heading__title">Anpassungen</h1>
           </div>
 
           <div className="prompt-summary" aria-label="Ausgangsbriefing">
@@ -1217,13 +1226,12 @@ function App() {
           {isGenerating && <LoadingOverlay mode={generationMode} />}
         </section>
 
-        <aside className="panel versions-panel" aria-label="Bisherige Versionen">
-          <div className="panel-heading compact">
-            <div>
-              <p className="eyebrow">Verlauf</p>
-              <h2>Bisherige Versionen</h2>
-            </div>
-            <History size={20} />
+        <aside className="panel versions-panel" aria-label="Verlauf">
+          <div className="panel-heading">
+            <span className="panel-heading__badge" aria-hidden="true">
+              <History size={18} />
+            </span>
+            <h2 className="panel-heading__title">Verlauf</h2>
           </div>
 
           <div className="versions">
@@ -1245,6 +1253,31 @@ function App() {
           </div>
         </aside>
       </section>
+
+      {showNewIdeaConfirm && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div className="confirm-dialog">
+            <p id="confirm-title">Nicht gespeicherte Arbeit verwerfen?</p>
+            <p className="confirm-body">Alle Versionen und die aktuelle Kachel gehen verloren. Du kannst danach eine neue Idee eingeben.</p>
+            <div className="confirm-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setShowNewIdeaConfirm(false)}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => { setShowNewIdeaConfirm(false); resetToStart(); }}
+              >
+                Verwerfen und neu starten
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
