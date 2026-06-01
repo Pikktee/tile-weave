@@ -992,7 +992,7 @@ function App() {
 
         <nav className="view-tabs" aria-label="Ansicht wählen">
           {[
-            ['kachel', Layers3, 'Kachel'],
+            ['kachel', Layers3, 'Nahtprüfung'],
             ['stoffbahn', Ruler, 'Stoffbahn'],
             ['kleidung', Shirt, 'Kleidung'],
           ].map(([mode, Icon, label]) => (
@@ -1119,7 +1119,7 @@ function App() {
               {viewMode === 'kachel' && (
                 <>
                   <Layers3 size={22} />
-                  <span>Kachel</span>
+                  <span>Nahtprüfung</span>
                 </>
               )}
               {viewMode === 'stoffbahn' && (
