@@ -15,7 +15,6 @@ import {
   Sparkles,
   Wand2,
   ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 
 type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
@@ -45,11 +44,17 @@ type PanZoomState = {
   zoom: number;
 };
 type PreviewTool = 'pan' | 'zoom' | null;
+type FabricSize = {
+  width: number;
+  height: number;
+};
 
 const minColorCount = 2;
 const maxColorCount = 6;
-const fabricWidthCm = 150;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
+const fabricWidthOptions = [70, 90, 110, 140, 150];
+const fabricHeightOptions = [50, 100, 150, 200, 250, 300];
+const initialFabricSize: FabricSize = { width: 150, height: 100 };
 
 const minPreviewZoom = 0.5;
 const maxPreviewZoom = 2.5;
@@ -221,9 +226,9 @@ const extractDominantPalette = async (imageUrl: string, preferredCount?: number)
   return selected.slice(0, targetCount).map(([red, green, blue]) => rgbToHex(red, green, blue));
 };
 
-const makeFabricStyle = (image: string, repeatSize: number): CSSProperties => ({
+const makeFabricStyle = (image: string, repeatSize: number, fabricWidth: number): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
-  backgroundSize: `${(repeatSize / fabricWidthCm) * 100}% auto`,
+  backgroundSize: `${(repeatSize / fabricWidth) * 100}% auto`,
 });
 
 const makeTileStyle = (image: string): CSSProperties => ({
@@ -242,6 +247,40 @@ const describeChangeStrength = (value: number) => {
 
 const clampPreviewZoom = (value: number) =>
   Math.max(minPreviewZoom, Math.min(maxPreviewZoom, Number(value.toFixed(2))));
+
+const getRulerStep = (dimension: number) => {
+  if (dimension <= 40) return { minor: 1, major: 5 };
+  if (dimension <= 80) return { minor: 2.5, major: 10 };
+  if (dimension <= 160) return { minor: 5, major: 25 };
+  return { minor: 10, major: 50 };
+};
+
+const makeRulerMarks = (dimension: number) => {
+  const { minor, major } = getRulerStep(dimension);
+  const marks = [];
+
+  for (let value = 0; value <= dimension + minor / 2; value += minor) {
+    const normalizedValue = Number(Math.min(value, dimension).toFixed(1));
+    const isMajor = Math.abs(normalizedValue / major - Math.round(normalizedValue / major)) < 0.001;
+
+    marks.push({
+      value: normalizedValue,
+      label: isMajor ? `${normalizedValue}`.replace('.', ',') : '',
+    });
+  }
+
+  const last = marks.at(-1);
+  if (!last || last.value !== dimension) {
+    marks.push({ value: dimension, label: `${dimension}`.replace('.', ',') });
+  }
+
+  return marks;
+};
+
+const getRulerPosition = (mark: number, dimension: number) => {
+  const ratio = dimension === 0 ? 0 : mark / dimension;
+  return `${ratio * 100}%`;
+};
 
 function Slider({
   label,
@@ -295,46 +334,48 @@ function Slider({
 function FabricPreview({
   image,
   repeatSize,
+  fabricSize,
   compact = false,
 }: {
   image: string;
   repeatSize: number;
+  fabricSize: FabricSize;
   compact?: boolean;
 }) {
-  const rulerMarks = Array.from({ length: 31 }, (_, index) => index);
-  const getRulerPosition = (mark: number) => {
-    if (mark === 0) return '24px';
-    if (mark === 30) return 'calc(100% - 24px)';
-    return `${(mark / 30) * 100}%`;
-  };
+  const verticalMarks = makeRulerMarks(fabricSize.height);
+  const horizontalMarks = makeRulerMarks(fabricSize.width);
+  const measureStyle = {
+    '--fabric-roll-aspect': `${fabricSize.width} / ${fabricSize.height}`,
+    '--fabric-roll-ratio': fabricSize.width / fabricSize.height,
+  } as CSSProperties;
 
   return (
-    <div className={compact ? 'fabric-measure compact' : 'fabric-measure'}>
+    <div className={compact ? 'fabric-measure compact' : 'fabric-measure'} style={measureStyle}>
       {!compact && (
         <div className="fabric-ruler vertical" aria-hidden="true">
-          {rulerMarks.map((mark) => (
+          {verticalMarks.map((mark) => (
             <span
-              className={mark % 5 === 0 ? 'major' : 'minor'}
-              key={mark}
-              style={{ bottom: getRulerPosition(mark) }}
+              className={mark.label ? 'major' : 'minor'}
+              key={mark.value}
+              style={{ top: getRulerPosition(mark.value, fabricSize.height) }}
             >
-              {mark % 5 === 0 && <strong>{mark}</strong>}
+              {mark.label && <strong>{mark.label}</strong>}
             </span>
           ))}
         </div>
       )}
-      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize)}>
+      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize, fabricSize.width)}>
         <div className="fabric-shadow" />
       </div>
       {!compact && (
         <div className="fabric-ruler horizontal" aria-hidden="true">
-          {rulerMarks.map((mark) => (
+          {horizontalMarks.map((mark) => (
             <span
-              className={mark % 5 === 0 ? 'major' : 'minor'}
-              key={mark}
-              style={{ left: getRulerPosition(mark) }}
+              className={mark.label ? 'major' : 'minor'}
+              key={mark.value}
+              style={{ left: getRulerPosition(mark.value, fabricSize.width) }}
             >
-              {mark % 5 === 0 && <strong>{mark}</strong>}
+              {mark.label && <strong>{mark.label}</strong>}
             </span>
           ))}
         </div>
@@ -575,6 +616,7 @@ function App() {
   const [message, setMessage] = useState('Idee eingeben und erstes Stoffmuster erzeugen.');
   const [previewTransform, setPreviewTransform] = useState<PanZoomState>(initialPanZoom);
   const [previewTool, setPreviewTool] = useState<PreviewTool>('pan');
+  const [fabricSize, setFabricSize] = useState<FabricSize>(initialFabricSize);
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
 
@@ -994,6 +1036,42 @@ function App() {
         <section className="preview-stage" aria-live="polite">
           <div className="preview-header">
             <div className="preview-tools">
+              {viewMode === 'stoffbahn' && (
+                <div className="fabric-size-picker" aria-label="Bahnmaß wählen">
+                  <label>
+                    <span>Länge</span>
+                    <select
+                      value={fabricSize.width}
+                      onChange={(event) =>
+                        setFabricSize((current) => ({ ...current, width: Number(event.target.value) }))
+                      }
+                      aria-label="Länge der Stoffbahn"
+                    >
+                      {fabricWidthOptions.map((value) => (
+                        <option key={value} value={value}>
+                          {value} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Breite</span>
+                    <select
+                      value={fabricSize.height}
+                      onChange={(event) =>
+                        setFabricSize((current) => ({ ...current, height: Number(event.target.value) }))
+                      }
+                      aria-label="Breite der Stoffbahn"
+                    >
+                      {fabricHeightOptions.map((value) => (
+                        <option key={value} value={value}>
+                          {value} cm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
               <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
                 <button
                   className={isPanMode ? 'icon-button active' : 'icon-button'}
@@ -1015,15 +1093,6 @@ function App() {
                 >
                   <ZoomIn size={17} />
                 </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={() => updatePreviewZoom(previewTransform.zoom - previewZoomStep)}
-                  aria-label="Verkleinern"
-                  title="Verkleinern (-)"
-                >
-                  <ZoomOut size={17} />
-                </button>
                 <label className="zoom-control">
                   <span>Zoom</span>
                   <input
@@ -1037,15 +1106,6 @@ function App() {
                   />
                   <strong>{Math.round(previewTransform.zoom * 100)}%</strong>
                 </label>
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={() => updatePreviewZoom(previewTransform.zoom + previewZoomStep)}
-                  aria-label="Vergrößern"
-                  title="Vergrößern (+)"
-                >
-                  <ZoomIn size={17} />
-                </button>
                 <button
                   className="icon-button"
                   type="button"
@@ -1091,7 +1151,7 @@ function App() {
             >
               {viewMode === 'stoffbahn' && (
                 <div className="fabric-view">
-                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} />
+                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} fabricSize={fabricSize} />
                 </div>
               )}
 

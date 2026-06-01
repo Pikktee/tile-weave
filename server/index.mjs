@@ -25,10 +25,11 @@ const sizePresets = new Set([
 // Qualitaet/Tempo wird pro Modus getrennt gesteuert:
 // - Initial: hohe Aufloesung + volle Schritte. Detailreiche, drucktaugliche Kachel;
 //   ~10 s sind hier bewusst in Kauf genommen, weil das Grundmuster zaehlt.
-// - Refinement: kleine Aufloesung + weniger Schritte fuer schnelle Iteration (~2 s).
+// - Refinement: mittlere Aufloesung + volle Schritte. Das ist etwas langsamer,
+//   vermeidet aber deutlich eher Rauschen und zerfallende Motive bei img2img.
 // Die Tiling-Pipeline skaliert ueberproportional mit der Flaeche, deshalb ist die
-// Aufloesung der groesste Tempo-Hebel (1024 ~10 s vs 512 ~2 s).
-const sizeDefaults = { initial: '1024', refine: '512' };
+// Aufloesung der groesste Tempo-Hebel.
+const sizeDefaults = { initial: '1024', refine: '768' };
 const sizeEnv = { initial: 'FAL_INIT_IMAGE_SIZE', refine: 'FAL_REFINE_IMAGE_SIZE' };
 
 const resolveImageSize = (mode = 'initial') => {
@@ -59,9 +60,9 @@ const resolveOutputFormat = () => {
   return outputFormats.has(requested) ? requested : 'png';
 };
 
-// 8 Schritte fuer das detailreiche Grundmuster, 6 fuer schnelles Refinement.
-// Ab 4 Schritten bricht die Qualitaet sichtbar ein (blockiger Hintergrund).
-const stepDefaults = { initial: 8, refine: 6 };
+// 8 Schritte fuer Grundmuster und Refinement. Weniger Schritte sind schneller,
+// erzeugen beim Refinement aber haeufig Rauschen statt gezielter Aenderung.
+const stepDefaults = { initial: 8, refine: 8 };
 const stepEnv = { initial: 'FAL_INIT_STEPS', refine: 'FAL_REFINE_STEPS' };
 
 const resolveInferenceSteps = (mode = 'initial') => {
@@ -69,6 +70,13 @@ const resolveInferenceSteps = (mode = 'initial') => {
   const requested = Number(process.env[stepEnv[key]]);
   if (!Number.isFinite(requested)) return stepDefaults[key];
   return Math.max(1, Math.min(8, Math.round(requested)));
+};
+
+const resolveRefineStrength = (changeStrength = 28) => {
+  const normalized = Math.max(0, Math.min(100, Number(changeStrength))) / 100;
+  // Die UI-Skala darf mutige Entwurfsabstaende ausdruecken, aber img2img wird
+  // bewusst konservativ gehalten: zu hohe strength zerstoert Rapport und Motive.
+  return Number((0.1 + normalized * 0.34).toFixed(2));
 };
 
 // referenceImage wird beim Refinement als Data-URI mitgesendet und kann groß sein.
@@ -148,12 +156,24 @@ app.post('/api/generate-pattern', async (req, res) => {
         : colorStrength > 72
           ? 'kräftige, palette-treue Farbumsetzung; die angegebenen Farben klar wiedererkennbar verwenden'
           : 'ausgewogene Farbumsetzung mit erkennbarer Nähe zur Palette';
+    const refineInstruction =
+      changeStrength < 22
+        ? 'Sehr nah an der Referenz bleiben: Rapport, Motivformen, Motivanzahl und Komposition erhalten; nur Farbe, Sauberkeit und kleine Details anpassen.'
+        : changeStrength < 45
+          ? 'Behutsam weiterentwickeln: Grundkomposition, Motivarten und Randanschluesse erhalten; Farben und Details sichtbar verbessern.'
+          : changeStrength < 70
+            ? 'Sichtbar weiterentwickeln, aber die textile Musterlogik der Referenz bewahren; keine zufaelligen neuen Rauschmotive einfuegen.'
+            : 'Mutig weiterentwickeln, dennoch als klare Variante derselben Musteridee mit erkennbarer Struktur, sauberen Motiven und nahtlosem Rapport.';
     const requestPrompt = [
       'smlstxtr, nahtlos kachelbare Musterkachel für Kleidungsstoff, seamless texture.',
       'Nur das flache Muster, keine Kleidung, kein Mockup, kein Rand, keine Perspektive, keine Schatten.',
       'Die Kachel muss an allen vier Seiten visuell fortsetzbar sein und wie ein echter Rapport funktionieren.',
       isRefinement
-        ? 'Nutze die Referenzkachel und erhalte den nahtlosen Rapport; verändere nur die genannten Eigenschaften.'
+        ? [
+            'Refinement auf Basis der Referenzkachel: erhalte Rapport, Motivstruktur, Kantenanschluesse und textile Flachheit.',
+            refineInstruction,
+            'Keine Rauschtextur, keine zufaelligen Pixel, keine koernigen Artefakte, kein verschwommener Hintergrund.',
+          ].join(' ')
         : 'Erzeuge die Kachel aus Beschreibung und Parametern.',
       `Motiv: ${String(prompt).slice(0, 800)}`,
       palette.length > 0 ? `Farbpalette: ${palette.join(', ')}` : '',
@@ -182,7 +202,7 @@ app.post('/api/generate-pattern', async (req, res) => {
       ...(isRefinement
         ? {
             image_url: referenceImage,
-            strength: Math.max(0, Math.min(1, Number(changeStrength) / 100)),
+            strength: resolveRefineStrength(changeStrength),
           }
         : {}),
     };

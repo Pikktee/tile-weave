@@ -34,12 +34,12 @@ Der Server liest `.env.local` und `.env`. Secrets duerfen nicht committet oder i
 Erwartete Variablen:
 
 - `FAL_KEY`: erforderlich fuer echte Bildgenerierung (fal.ai-Key im Format `<id>:<secret>`).
-Bildqualitaet und Tempo werden pro Modus getrennt gesteuert. Initial zaehlt die Qualitaet (hohe Aufloesung, ~10 s ok), Refinement zaehlt das Tempo (kleine Aufloesung, ~2 s):
+Bildqualitaet und Tempo werden pro Modus getrennt gesteuert. Initial zaehlt die Qualitaet (hohe Aufloesung, ~10 s ok). Beim Refinement zaehlt inzwischen ebenfalls stabile Qualitaet vor maximalem Tempo, weil zu kleine img2img-Laeufe eher Rauschen als gezielte Aenderungen erzeugen:
 
 - `FAL_INIT_IMAGE_SIZE`: optional, Standard ist `1024`. Aufloesung der initialen Generierung. Preset (`square_hd` …) oder quadratische Kantenlaenge 256-2048. Hoeher = ueberproportional langsamer.
 - `FAL_INIT_STEPS`: optional, Standard ist `8` (volle Detailqualitaet). Bereich 1-8.
-- `FAL_REFINE_IMAGE_SIZE`: optional, Standard ist `512`. Aufloesung des Refinements. Hoeher setzen, wenn der Qualitaetssprung zur Initialkachel zu gross wirkt (kostet Tempo).
-- `FAL_REFINE_STEPS`: optional, Standard ist `6`. Bereich 1-8. Ab 4 sichtbar schlechter.
+- `FAL_REFINE_IMAGE_SIZE`: optional, Standard ist `768`. Aufloesung des Refinements. Hoeher setzen, wenn der Qualitaetssprung zur Initialkachel zu gross wirkt (kostet Tempo).
+- `FAL_REFINE_STEPS`: optional, Standard ist `8`. Bereich 1-8. Niedrigere Werte sind schneller, fuehren beim Refinement aber schneller zu Rauschen.
 - `FAL_ACCELERATION`: optional, Standard ist `high`. Alternativ `regular` oder `none`.
 - `FAL_OUTPUT_FORMAT`: optional, Standard ist `png` (sauberer Export). Alternativ `jpeg` oder `webp` fuer kleinere Payloads.
 - `PORT`: optional, Standard ist `8787`.
@@ -62,17 +62,17 @@ fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/tur
 - Generierung ist asynchron und nutzerseitig fehlertolerant. Fehler sollen als verstaendliche deutsche Statusmeldung in `message` landen.
 - Versionen werden nur im React-State gehalten und nicht persistiert. Keine Persistenz einbauen, ohne auch UX, Datenschutz und Speichergrenzen mitzudenken.
 - Refinement sendet bei passendem Modus die aktuelle Kachel als `referenceImage`; der Server reicht sie als `image_url` an die img2img-Variante des Modells weiter.
-- Das Frontend verkleinert die Referenzkachel vor dem Refinement auf 512 px laengste Kante (`downscaleForRefine()`), damit Upload und Serverzeit niedrig bleiben. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, diese Konstante bewusst mitpruefen.
+- Das Frontend verkleinert die Referenzkachel vor dem Refinement auf 768 px laengste Kante (`downscaleForRefine()`), damit Uploads niedrig bleiben, ohne Motivstruktur fuer img2img zu stark zu verlieren. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, diese Konstante bewusst mitpruefen.
 - Der initiale Flow ist Prompt-first: Nutzer geben zuerst den Prompt ein und erzeugen daraus eine KI-Kachel.
 - Nach der ersten Kachel gibt es KI-Refinement. Refinement ist eine neue KI-Generierung auf Basis der bestehenden Kachel, nicht lokale Bildbearbeitung.
 - Keine lokalen Ersatzkacheln erzeugen, wenn fal.ai fehlschlaegt. Fehler klar anzeigen.
 
 Aktuelle Reglerlogik:
 
-- `Dichte`: wird an die KI gesendet und soll die Anzahl/Komplexitaet der Muster-Elemente beeinflussen.
-- `Farbintensitaet`: wird an die KI gesendet und soll Saettigung/Palettentreue beeinflussen.
-- `Aenderungsstaerke`: wird nur beim Refinement relevant und soll steuern, wie stark die Referenzkachel veraendert wird.
-- `Rapport-Zoom`: ist bewusst nur Vorschau/Anzeige. Er aendert `background-size` und erzeugt keine neue Kachel.
+- `Musterfuelle` (`density`): wird an die KI gesendet und soll die Anzahl/Komplexitaet der Muster-Elemente beeinflussen.
+- `Farbwirkung` (`colorStrength`): wird an die KI gesendet und soll Saettigung/Palettentreue beeinflussen.
+- `Entwurfsabstand` (`changeStrength`): wird nur beim Refinement relevant und beschreibt fuer Nutzer, wie nah die Variante am aktuellen Muster bleiben soll. Serverseitig wird daraus bewusst eine konservative img2img-`strength` abgeleitet, damit Rapport und Motive nicht zerfallen.
+- `Rapportmass` (`repeatSize`): ist bewusst nur Vorschau/Anzeige in cm/m. Es aendert `background-size` und erzeugt keine neue Kachel.
 - `scale`/`Motivgroesse` existiert serverseitig nur noch als Legacy-Payload mit Default `50`; das Frontend sendet und zeigt diesen Wert nicht mehr.
 
 Nicht wieder als Regler einfuehren, solange sie nicht wirklich sinnvoll mit KI-Bildgenerierung verbunden sind:
@@ -101,7 +101,7 @@ Farblogik:
 - Bewegungen duerfen nur unter `prefers-reduced-motion: no-preference` ergaenzt werden.
 - Waehrend der KI-Generierung eine moderne Lade-Animation anzeigen. Aktuell nutzt `LoadingOverlay` Web-Loader, asymptotischen Fortschrittsbalken und Sekundenanzeige (Initial ca. 11 s, Refinement ca. 4 s geschaetzt). Keine Statusmeldung im Stil "Briefing geaendert..." verwenden.
 - Keine fixen realen Massangaben wie `150 cm` oder `200 cm` an responsive Vorschauflaechen schreiben. Die Stoffbahn ist eine Simulation und nicht massstabsgetreu.
-- Wenn Mass-/Skalierungsbegriffe gebraucht werden, klar zwischen echter Kachel, Rapport-Zoom und nicht massstabsgetreuer Vorschau unterscheiden.
+- Wenn Mass-/Skalierungsbegriffe gebraucht werden, klar zwischen echter Kachel, Rapportmass und simulierter, nicht druckverbindlicher Vorschau unterscheiden.
 
 ## Server-Konventionen
 

@@ -855,19 +855,55 @@ input[type="range"] {
   position: relative;
   z-index: 2;
   display: flex;
-  justify-content: flex-end;
 }
 
 .preview-tools {
   display: flex;
   flex-wrap: wrap;
+  width: 100%;
   justify-content: flex-end;
   gap: 10px;
 }
 
+.fabric-size-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 252, 246, 0.78);
+  box-shadow: 0 10px 30px rgba(43, 33, 30, 0.08);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.fabric-size-picker > span {
+  color: var(--ink);
+}
+
+.fabric-size-picker label {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
+}
+
+.fabric-size-picker select {
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 26px 0 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 800;
+}
+
 .viewport-controls {
   display: flex;
-  min-width: min(100%, 430px);
+  min-width: min(100%, 350px);
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
@@ -1036,24 +1072,30 @@ input[type="range"] {
   height: 100%;
   display: grid;
   place-items: center;
+  container-type: size;
 }
 
 .fabric-measure {
+  --fabric-ruler-width: 66px;
+  --fabric-ruler-height: 46px;
   display: grid;
-  grid-template-columns: 48px minmax(260px, 820px);
-  grid-template-rows: minmax(360px, 1fr) 46px;
+  grid-template-columns: var(--fabric-ruler-width) minmax(0, 1fr);
+  grid-template-rows: auto var(--fabric-ruler-height);
   align-items: stretch;
   justify-content: center;
-  width: min(100%, 900px);
-  height: min(100%, 760px);
+  width: min(
+    100cqw,
+    1040px,
+    calc((100cqh - var(--fabric-ruler-height)) * var(--fabric-roll-ratio, 1.5) + var(--fabric-ruler-width))
+  );
   min-height: 0;
-  max-height: 100%;
 }
 
 .fabric-measure.compact {
   grid-template-columns: minmax(190px, 1fr);
   grid-template-rows: minmax(220px, 1fr);
   width: 100%;
+  max-width: none;
 }
 
 .fabric-measure.compact .fabric-roll {
@@ -1067,8 +1109,9 @@ input[type="range"] {
   grid-column: 2;
   grid-row: 1;
   width: 100%;
-  height: 100%;
+  height: auto;
   max-height: 100%;
+  aspect-ratio: var(--fabric-roll-aspect, 3 / 2);
   border-radius: 0 7px 0 0;
   overflow: hidden;
   background-repeat: repeat;
@@ -1100,8 +1143,7 @@ input[type="range"] {
 .fabric-ruler {
   position: relative;
   color: var(--ink);
-  background: rgba(255, 252, 246, 0.68);
-  backdrop-filter: blur(1px);
+  background: transparent;
   font-size: clamp(0.72rem, 1vw, 0.95rem);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
