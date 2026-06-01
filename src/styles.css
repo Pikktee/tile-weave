@@ -558,11 +558,11 @@ h2 {
   border: 1px solid rgba(25, 23, 22, 0.14);
   border-radius: 12px;
   padding: 9px 10px;
-  color: var(--ink);
+  color: var(--muted);
   background: rgba(255, 252, 246, 0.98);
   box-shadow: 0 16px 34px rgba(43, 33, 30, 0.18);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 400;
   line-height: 1.35;
   opacity: 0;
   pointer-events: none;
