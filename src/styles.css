@@ -59,7 +59,9 @@ textarea:focus-visible {
 
 .refinement-shell {
   display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(260px, 320px);
   grid-template-rows: auto minmax(0, 1fr);
+  gap: 18px;
   height: 100vh;
   min-height: 0;
   overflow: hidden;
@@ -67,11 +69,9 @@ textarea:focus-visible {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(260px, 320px);
-  gap: 18px;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  max-width: 1760px;
-  margin: 0 auto 18px;
 }
 
 .view-tabs {
@@ -199,19 +199,12 @@ textarea:focus-visible {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(260px, 320px);
-  gap: 18px;
-  max-width: 1760px;
-  margin: 0 auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: stretch;
 }
 
-.refinement-shell .topbar {
-  margin: 0 0 18px;
-}
-
 .refinement-shell .workspace {
-  width: 100%;
   min-height: 0;
 }
 
@@ -1590,9 +1583,15 @@ input[type="range"] {
     overflow: visible;
   }
 
-  .topbar,
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .view-tabs,
