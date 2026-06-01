@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useState } from 'react';
+import { type CSSProperties, type FormEvent, useEffect, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
@@ -16,15 +16,12 @@ import {
   Wand2,
 } from 'lucide-react';
 
-type FabricStyle = 'frei' | 'kleiderdruck' | 'seidenfoulard' | 'leinenprint' | 'jacquard';
 type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
 type CompareViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 type ColorCountPreference = 'auto' | '2' | '3' | '4' | '5' | '6';
-type StartPicker = 'colors' | 'style';
 
 type PatternSettings = {
   density: number;
-  motifScale: number;
   colorStrength: number;
   changeStrength: number;
   repeatSize: number;
@@ -37,7 +34,6 @@ type Version = {
   image: string;
   settings: PatternSettings;
   prompt: string;
-  fabricStyle: FabricStyle;
   createdAt: string;
 };
 
@@ -85,40 +81,6 @@ const palettes = [
   ['#1D5C8A', '#EDC85E', '#E86642', '#F7F1E3', '#21A8A3', '#161514'],
 ];
 
-const fabricStyles: Record<
-  FabricStyle,
-  { label: string; description: string; promptAddition: string }
-> = {
-  frei: {
-    label: 'Automatisch',
-    description: '',
-    promptAddition: '',
-  },
-  kleiderdruck: {
-    label: 'Kleiderdruck',
-    description: 'klarer Allover-Print für Blusen, Röcke und Sommerkleider',
-    promptAddition:
-      'Stil: modischer Kleiderstoff als klarer Allover-Print, gut lesbar auf Blusen, Röcken und Sommerkleidern.',
-  },
-  seidenfoulard: {
-    label: 'Seidenfoulard',
-    description: 'fein, elegant, mit grafischer Präzision und fließendem Rhythmus',
-    promptAddition:
-      'Stil: eleganter Seidenfoulard mit feiner grafischer Präzision, fließendem Rhythmus und hochwertiger Druckanmutung.',
-  },
-  leinenprint: {
-    label: 'Leinenprint',
-    description: 'organisch, handgedruckt, etwas luftiger und textiler',
-    promptAddition:
-      'Stil: luftiger Leinenprint mit handgedruckter, organischer Textur und angenehm natürlicher Stoffwirkung.',
-  },
-  jacquard: {
-    label: 'Jacquard',
-    description: 'dichter, ornamentaler Rapport mit gewebter Anmutung',
-    promptAddition:
-      'Stil: dichter ornamentaler Jacquard-Rapport mit gewebter Anmutung, ohne fotorealistisches Mockup.',
-  },
-};
 
 const garmentTypes: Record<GarmentType, { label: string; note: string }> = {
   hemd: {
@@ -145,7 +107,6 @@ const garmentTypes: Record<GarmentType, { label: string; note: string }> = {
 
 const initialSettings: PatternSettings = {
   density: 58,
-  motifScale: 46,
   colorStrength: 62,
   changeStrength: 34,
   repeatSize: 112,
@@ -165,8 +126,6 @@ const downloadImage = (imageUrl: string, filename: string) => {
   link.click();
 };
 
-const buildAiPrompt = (prompt: string, fabricStyle: FabricStyle) =>
-  [prompt.trim(), fabricStyles[fabricStyle].promptAddition].filter(Boolean).join('\n');
 
 const clampColorCount = (count: number) => Math.max(minColorCount, Math.min(maxColorCount, count));
 
@@ -191,6 +150,32 @@ const loadImage = (imageUrl: string) =>
     image.onerror = () => reject(new Error('Bild konnte nicht für die Farbanalyse geladen werden.'));
     image.src = imageUrl;
   });
+
+// Verkleinert die Referenzkachel vor dem Refinement auf die Refine-Auflösung.
+// Das Refinement generiert ohnehin bei dieser Größe; eine hochauflösende Referenz
+// würde nur Upload und Serverzeit aufblähen (1024er-Referenz ~8 s vs 512er ~3 s).
+const refineReferenceSize = 512;
+
+const downscaleForRefine = async (imageUrl: string): Promise<string> => {
+  try {
+    const image = await loadImage(imageUrl);
+    const longestSide = Math.max(image.width, image.height);
+    if (longestSide <= refineReferenceSize) return imageUrl;
+
+    const scale = refineReferenceSize / longestSide;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(image.width * scale);
+    canvas.height = Math.round(image.height * scale);
+    const context = canvas.getContext('2d');
+    if (!context) return imageUrl;
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return canvas.toDataURL('image/png');
+  } catch {
+    return imageUrl;
+  }
+};
 
 const extractDominantPalette = async (imageUrl: string, preferredCount?: number) => {
   const image = await loadImage(imageUrl);
@@ -303,9 +288,25 @@ function Slider({
 }
 
 function LoadingOverlay({ mode }: { mode: GenerationMode }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const id = window.setInterval(() => setElapsedMs(Date.now() - start), 100);
+
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Die Dauer ist nicht exakt vorhersehbar (Initial ~10 s, Refinement ~4 s, plus
+  // moegliche Cold Starts). Der Balken naehert sich daher asymptotisch ~95 % und
+  // springt erst beim Entfernen des Overlays (Generierung fertig) auf 100 %.
+  const estimateSec = mode === 'initial' ? 11 : 4;
+  const elapsedSec = elapsedMs / 1000;
+  const progress = Math.min(95, (1 - Math.exp(-elapsedSec / (estimateSec * 0.55))) * 100);
+
   return (
     <div className="generating-overlay" role="status" aria-live="polite">
-      <div className="weave-loader">
+      <div className="weave-loader" aria-hidden="true">
         <span />
         <span />
         <span />
@@ -314,9 +315,13 @@ function LoadingOverlay({ mode }: { mode: GenerationMode }) {
       <strong>{mode === 'initial' ? 'Dein Stoffmuster entsteht' : 'Dein Stoffmuster wird verfeinert'}</strong>
       <small>
         {mode === 'initial'
-          ? 'Einen Moment, dein Muster wird gestaltet.'
+          ? 'Einen Moment, dein Muster wird gewebt.'
           : 'Einen Moment, deine Änderungen werden eingearbeitet.'}
       </small>
+      <div className="generating-progress" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <span className="generating-elapsed">{Math.floor(elapsedSec)} s</span>
     </div>
   );
 }
@@ -441,10 +446,6 @@ function VersionMeta({ version }: { version?: Version }) {
           <dd>{version.settings.density}</dd>
         </div>
         <div>
-          <dt>Motivgröße</dt>
-          <dd>{version.settings.motifScale}</dd>
-        </div>
-        <div>
           <dt>Farbintensität</dt>
           <dd>{version.settings.colorStrength}</dd>
         </div>
@@ -504,56 +505,6 @@ function ColorCountPicker({
   );
 }
 
-function FabricStylePicker({
-  value,
-  isOpen,
-  onToggle,
-  onClose,
-  onChange,
-}: {
-  value: FabricStyle;
-  isOpen: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-  onChange: (value: FabricStyle) => void;
-}) {
-  return (
-    <div className="start-picker start-picker-wide" onBlur={(event) => {
-      const nextFocus = event.relatedTarget;
-      if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
-        onClose();
-      }
-    }}>
-      <span className="start-picker-label">Stoffstil</span>
-      <button className={isOpen ? 'start-picker-button active' : 'start-picker-button'} type="button" onClick={onToggle}>
-        <span>
-          <strong>{fabricStyles[value].label}</strong>
-        </span>
-        <ChevronDown size={17} />
-      </button>
-      {isOpen && (
-        <div className="start-menu start-menu-wide" role="listbox" aria-label="Stoffstil wählen">
-          {(Object.keys(fabricStyles) as FabricStyle[]).map((style) => (
-            <button
-              key={style}
-              className={value === style ? 'start-menu-option active' : 'start-menu-option'}
-              type="button"
-              role="option"
-              aria-selected={value === style}
-              onClick={() => onChange(style)}
-            >
-              <span>
-                <strong>{fabricStyles[style].label}</strong>
-                {fabricStyles[style].description && <small>{fabricStyles[style].description}</small>}
-              </span>
-              {value === style && <Check size={16} />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
@@ -563,8 +514,7 @@ function App() {
   const [tileImage, setTileImage] = useState('');
   const [prompt, setPrompt] = useState('');
   const [startColorCount, setStartColorCount] = useState<ColorCountPreference>('auto');
-  const [openStartPicker, setOpenStartPicker] = useState<StartPicker | null>(null);
-  const [fabricStyle, setFabricStyle] = useState<FabricStyle>('frei');
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
   const [activeVersionId, setActiveVersionId] = useState('');
   const [compareAId, setCompareAId] = useState('');
@@ -619,7 +569,6 @@ function App() {
   const restoreVersion = (version: Version) => {
     setSettings(version.settings);
     setPrompt(version.prompt);
-    setFabricStyle(version.fabricStyle);
     setTileImage(version.image);
     setActiveVersionId(version.id);
   };
@@ -633,16 +582,17 @@ function App() {
     setViewMode('stoffbahn');
     setCompareViewMode('stoffbahn');
     setStartColorCount('auto');
-    setOpenStartPicker(null);
+    setColorPickerOpen(false);
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
   };
 
   const generateWithAi = async (mode: GenerationMode) => {
-    const requestPrompt = buildAiPrompt(prompt, fabricStyle);
+    const requestPrompt = prompt.trim();
     const previousActiveId = activeVersionId;
     const requestedInitialColorCount =
       mode === 'initial' && startColorCount !== 'auto' ? Number(startColorCount) : undefined;
+    const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
     const requestBody = {
       prompt: requestPrompt,
       ...(mode === 'initial'
@@ -654,11 +604,10 @@ function App() {
             colorCount: settings.colors.length,
           }),
       density: settings.density,
-      scale: settings.motifScale,
       colorStrength: settings.colorStrength,
       changeStrength: settings.changeStrength,
       mode,
-      referenceImage: mode === 'refine' ? tileImage : undefined,
+      referenceImage,
     };
 
     setGenerationMode(mode);
@@ -707,7 +656,6 @@ function App() {
           image: data.imageUrl,
           settings: nextSettings,
           prompt,
-          fabricStyle,
           createdAt: formatTime(),
         },
         ...current,
@@ -781,22 +729,12 @@ function App() {
             <div className="start-options" aria-label="Optionale Leitplanken">
               <ColorCountPicker
                 value={startColorCount}
-                isOpen={openStartPicker === 'colors'}
-                onToggle={() => setOpenStartPicker((current) => (current === 'colors' ? null : 'colors'))}
-                onClose={() => setOpenStartPicker(null)}
+                isOpen={colorPickerOpen}
+                onToggle={() => setColorPickerOpen((current) => !current)}
+                onClose={() => setColorPickerOpen(false)}
                 onChange={(value) => {
                   setStartColorCount(value);
-                  setOpenStartPicker(null);
-                }}
-              />
-              <FabricStylePicker
-                value={fabricStyle}
-                isOpen={openStartPicker === 'style'}
-                onToggle={() => setOpenStartPicker((current) => (current === 'style' ? null : 'style'))}
-                onClose={() => setOpenStartPicker(null)}
-                onChange={(value) => {
-                  setFabricStyle(value);
-                  setOpenStartPicker(null);
+                  setColorPickerOpen(false);
                 }}
               />
             </div>
@@ -879,11 +817,6 @@ function App() {
           <div className="prompt-summary" aria-label="Ausgangsbriefing">
             <span>Ausgangsidee</span>
             <p>{prompt}</p>
-            {fabricStyle !== 'frei' && (
-              <div className="prompt-summary-footer">
-                <small>{fabricStyles[fabricStyle].label}</small>
-              </div>
-            )}
           </div>
 
           <CompactPalette
@@ -904,11 +837,6 @@ function App() {
               label="Dichte"
               value={settings.density}
               onChange={(value) => updateSetting('density', value)}
-            />
-            <Slider
-              label="Motivgröße"
-              value={settings.motifScale}
-              onChange={(value) => updateSetting('motifScale', value)}
             />
             <Slider
               label="Farbintensität"
