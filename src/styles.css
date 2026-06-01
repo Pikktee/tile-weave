@@ -67,11 +67,15 @@ textarea:focus-visible {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(210px, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(280px, 340px) minmax(520px, 1fr) minmax(260px, 320px);
+  gap: 18px;
   align-items: center;
   max-width: 1760px;
   margin: 0 auto 18px;
+}
+
+.view-tabs {
+  justify-self: center;
 }
 
 .start-mode {
