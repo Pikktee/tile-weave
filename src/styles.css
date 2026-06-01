@@ -844,15 +844,11 @@ input[type="range"] {
   gap: 0;
   overflow: hidden;
   padding: 0;
-  border: 0;
-  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(255, 252, 246, 0.72), rgba(255, 252, 246, 0.36)),
     repeating-linear-gradient(90deg, rgba(25, 23, 22, 0.045) 0 1px, transparent 1px 48px),
     repeating-linear-gradient(0deg, rgba(25, 23, 22, 0.04) 0 1px, transparent 1px 48px),
     rgba(255, 252, 246, 0.72);
-  box-shadow: none;
-  backdrop-filter: none;
 }
 
 .preview-header {
@@ -915,7 +911,7 @@ input[type="range"] {
   border-radius: 999px;
   padding: 0 26px 0 10px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
   font-weight: 800;
 }
 
@@ -1691,7 +1687,7 @@ input[type="range"] {
   .preview-stage {
     min-height: 640px;
     padding: 0;
-    border-radius: 0;
+    border-radius: 18px;
   }
 
   .preview-header {
