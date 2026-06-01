@@ -1202,19 +1202,13 @@ function App() {
               {viewMode === 'kachel' && (
                 <div className="tile-view">
                   <article className="tile-card">
-                    <div className="tile-card-header">
-                      <h3>Originalkachel</h3>
-                      <span>1 Rapport</span>
-                    </div>
+                    <h3 className="tile-card-label">Originalkachel</h3>
                     <div className="tile-focus">
                       <img src={tileImage} alt="Originale quadratische Musterkachel" />
                     </div>
                   </article>
                   <article className="tile-card">
-                    <div className="tile-card-header">
-                      <h3>Nahtprüfung</h3>
-                      <span>3 x 3 Wiederholung</span>
-                    </div>
+                    <h3 className="tile-card-label">Nahtprüfung</h3>
                     <div className="tile-repeat-grid" style={makeTileStyle(tileImage)} />
                   </article>
                 </div>
