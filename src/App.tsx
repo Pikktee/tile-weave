@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useState } from 'react';
+import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
 import {
   CircleHelp,
   Download,
@@ -617,8 +617,10 @@ function App() {
   const [previewTransform, setPreviewTransform] = useState<PanZoomState>(initialPanZoom);
   const [previewTool, setPreviewTool] = useState<PreviewTool>('pan');
   const [fabricSize, setFabricSize] = useState<FabricSize>(initialFabricSize);
+  const [pointerFocusedFabricSelect, setPointerFocusedFabricSelect] = useState<keyof FabricSize | null>(null);
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
+  const fabricSelectPointerFocusRef = useRef(false);
 
   const hasTile = Boolean(tileImage);
   const showGarmentControl = viewMode === 'kleidung';
@@ -639,6 +641,20 @@ function App() {
 
   const resetPreviewTransform = () => {
     setPreviewTransform(initialPanZoom);
+  };
+
+  const markFabricSelectPointerFocus = () => {
+    fabricSelectPointerFocusRef.current = true;
+  };
+
+  const handleFabricSelectFocus = (field: keyof FabricSize) => {
+    setPointerFocusedFabricSelect(fabricSelectPointerFocusRef.current ? field : null);
+    fabricSelectPointerFocusRef.current = false;
+  };
+
+  const handleFabricSelectKeyDown = () => {
+    fabricSelectPointerFocusRef.current = false;
+    setPointerFocusedFabricSelect(null);
   };
 
   useEffect(() => {
@@ -1041,7 +1057,12 @@ function App() {
                   <label>
                     <span>Länge</span>
                     <select
+                      className={pointerFocusedFabricSelect === 'width' ? 'pointer-focused' : undefined}
                       value={fabricSize.width}
+                      onPointerDown={markFabricSelectPointerFocus}
+                      onFocus={() => handleFabricSelectFocus('width')}
+                      onBlur={() => setPointerFocusedFabricSelect(null)}
+                      onKeyDown={handleFabricSelectKeyDown}
                       onChange={(event) =>
                         setFabricSize((current) => ({ ...current, width: Number(event.target.value) }))
                       }
@@ -1057,7 +1078,12 @@ function App() {
                   <label>
                     <span>Breite</span>
                     <select
+                      className={pointerFocusedFabricSelect === 'height' ? 'pointer-focused' : undefined}
                       value={fabricSize.height}
+                      onPointerDown={markFabricSelectPointerFocus}
+                      onFocus={() => handleFabricSelectFocus('height')}
+                      onBlur={() => setPointerFocusedFabricSelect(null)}
+                      onKeyDown={handleFabricSelectKeyDown}
                       onChange={(event) =>
                         setFabricSize((current) => ({ ...current, height: Number(event.target.value) }))
                       }

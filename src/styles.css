@@ -841,20 +841,38 @@ input[type="range"] {
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
+  gap: 0;
   overflow: hidden;
-  padding: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(255, 252, 246, 0.72), rgba(255, 252, 246, 0.36)),
     repeating-linear-gradient(90deg, rgba(25, 23, 22, 0.045) 0 1px, transparent 1px 48px),
     repeating-linear-gradient(0deg, rgba(25, 23, 22, 0.04) 0 1px, transparent 1px 48px),
     rgba(255, 252, 246, 0.72);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .preview-header {
   position: relative;
   z-index: 2;
   display: flex;
+  padding: 22px 22px 16px;
+}
+
+.preview-header::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  bottom: 0;
+  left: 22px;
+  height: 1px;
+  background:
+    linear-gradient(90deg, transparent, rgba(244, 91, 105, 0.32), rgba(33, 168, 163, 0.34), transparent),
+    linear-gradient(90deg, rgba(25, 23, 22, 0.08), rgba(25, 23, 22, 0.04));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .preview-tools {
@@ -901,6 +919,13 @@ input[type="range"] {
   font-weight: 800;
 }
 
+.fabric-size-picker select:focus:not(:focus-visible),
+.fabric-size-picker select.pointer-focused:focus,
+.fabric-size-picker select.pointer-focused:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .viewport-controls {
   display: flex;
   min-width: min(100%, 350px);
@@ -934,6 +959,7 @@ input[type="range"] {
   grid-template-columns: auto minmax(90px, 1fr) 42px;
   gap: 8px;
   align-items: center;
+  margin-left: 8px;
   min-width: 190px;
   color: var(--muted);
   font-size: 0.78rem;
@@ -972,9 +998,9 @@ input[type="range"] {
   display: grid;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(25, 23, 22, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 252, 246, 0.26);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   touch-action: none;
   user-select: none;
 }
@@ -1664,6 +1690,17 @@ input[type="range"] {
 
   .preview-stage {
     min-height: 640px;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .preview-header {
+    padding: 16px 16px 14px;
+  }
+
+  .preview-header::after {
+    right: 16px;
+    left: 16px;
   }
 
   .preview-tools,
