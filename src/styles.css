@@ -1110,16 +1110,6 @@ input[type="range"] {
   mix-blend-mode: soft-light;
 }
 
-.fabric-shadow {
-  position: absolute;
-  z-index: 2;
-  right: 8%;
-  top: 0;
-  width: 15%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(22, 21, 20, 0.16), transparent);
-}
-
 .fabric-ruler {
   position: relative;
   color: rgba(80, 70, 60, 0.55);

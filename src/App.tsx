@@ -421,7 +421,6 @@ function FabricPreview({
           className="fabric-pattern-layer"
           style={makeFabricStyle(image, repeatSize, fabricSize.width, offsetX, offsetY, imageFilter)}
         />
-        <div className="fabric-shadow" />
       </div>
       {!compact && (
         <div className="fabric-ruler horizontal" aria-hidden="true">
