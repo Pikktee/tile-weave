@@ -636,6 +636,15 @@ h2 {
   transform: translateY(0);
 }
 
+.versions-panel .control-tooltip--below .control-tooltip-popup {
+  left: auto;
+  right: -14px;
+}
+
+.versions-panel .control-tooltip--below .control-tooltip-popup::after {
+  left: calc(100% - 23px);
+}
+
 input[type="range"] {
   width: 100%;
   accent-color: var(--teal);
