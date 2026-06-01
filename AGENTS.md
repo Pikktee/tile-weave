@@ -58,25 +58,27 @@ fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/tur
 ## Architekturhinweise
 
 - Die App ist bewusst klein gehalten. Bevor neue Abstraktionen eingefuehrt werden, pruefen, ob die bestehende Struktur in `App.tsx` und `styles.css` ausreicht.
-- `PatternSettings` (Felder: `density`, `colorStrength`, `changeStrength`, `repeatSize`, `colors`), `Version`, `ViewMode` und `GenerationMode` beschreiben den zentralen UI-Vertrag. Aenderungen daran muessen mit den API-Payloads und allen Ansichten abgeglichen werden.
+- `PatternSettings` (Felder: `density`, `colorStrength`, `changeStrength`, `repeatSize`, `colors`), `Version`, `ViewMode` und `GenerationMode` beschreiben den zentralen UI-Vertrag. Aenderungen daran muessen mit den API-Payloads und allen Ansichten abgeglichen werden. `density`, `colorStrength` und `changeStrength` sind aktuell aus der UI ausgeblendet (siehe Reglerlogik); Typ, State und Server-Defaults bleiben aber bestehen.
 - Generierung ist asynchron und nutzerseitig fehlertolerant. Fehler sollen als verstaendliche deutsche Statusmeldung in `message` landen.
 - Versionen werden nur im React-State gehalten und nicht persistiert. Keine Persistenz einbauen, ohne auch UX, Datenschutz und Speichergrenzen mitzudenken.
-- Refinement sendet bei passendem Modus die aktuelle Kachel als `referenceImage`; der Server reicht sie als `image_url` an die img2img-Variante des Modells weiter.
-- Das Frontend verkleinert die Referenzkachel vor dem Refinement auf 768 px laengste Kante (`downscaleForRefine()`), damit Uploads niedrig bleiben, ohne Motivstruktur fuer img2img zu stark zu verlieren. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, diese Konstante bewusst mitpruefen.
 - Der initiale Flow ist Prompt-first: Nutzer geben zuerst den Prompt ein und erzeugen daraus eine KI-Kachel.
-- Nach der ersten Kachel gibt es KI-Refinement. Refinement ist eine neue KI-Generierung auf Basis der bestehenden Kachel, nicht lokale Bildbearbeitung.
+- Nach der ersten Kachel verfeinert ein Prompt-Chat im Panel "Anpassungen" die Kachel. Jede Eingabe wird an den bisherigen Prompt angehaengt (`combined = base + ', ' + addition`), in `prompt` uebernommen und loest eine **neue text-to-image-Generierung** (`mode: 'initial'`) aus. Es ist kein img2img und keine lokale Bildbearbeitung; jede Anwendung erzeugt also ein neues Layout.
+- Die jeweils neue Anweisung wird zusaetzlich als `emphasis` an den Server gesendet und dort als letzter, hervorgehobener Prompt-Block mit Vorrang platziert, damit sie nicht von der Boilerplate davor verwaessert wird. Grund: Das Turbo-Modell folgt einzelnen Anweisungen in langen kumulierten Prompts sonst nur schwach.
+- Der `promptHistory`-State zeigt im Panel pro Eintrag nur die jeweilige Nachricht (initialer Prompt bzw. einzelne Ergaenzung), nicht den kumulierten Gesamtprompt.
+- Serverseitig existiert weiterhin ein img2img-Refinement-Pfad (`mode: 'refine'` mit `referenceImage`/`downscaleForRefine()` auf 768 px und `strength` aus `changeStrength`), wird aber aktuell nicht aus der UI aufgerufen. Er bleibt als Option erhalten; vor Reaktivierung beachten, dass die konservative `strength` Prompt-Anweisungen stark daempft. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, die `downscaleForRefine()`-Konstante bewusst mitpruefen.
 - Keine lokalen Ersatzkacheln erzeugen, wenn fal.ai fehlschlaegt. Fehler klar anzeigen.
 
 Aktuelle Reglerlogik:
 
-- `Musterfuelle` (`density`): wird an die KI gesendet und soll die Anzahl/Komplexitaet der Muster-Elemente beeinflussen.
-- `Farbwirkung` (`colorStrength`): wird an die KI gesendet und soll Saettigung/Palettentreue beeinflussen.
-- `Entwurfsabstand` (`changeStrength`): wird nur beim Refinement relevant und beschreibt fuer Nutzer, wie nah die Variante am aktuellen Muster bleiben soll. Serverseitig wird daraus bewusst eine konservative img2img-`strength` abgeleitet, damit Rapport und Motive nicht zerfallen.
-- `Rapportmass` (`repeatSize`): ist bewusst nur Vorschau/Anzeige in cm/m. Es aendert `background-size` und erzeugt keine neue Kachel.
-- `scale`/`Motivgroesse` existiert serverseitig nur noch als Legacy-Payload mit Default `50`; das Frontend sendet und zeigt diesen Wert nicht mehr.
+- Die KI-Mustersteuerung laeuft ueber den Prompt-Chat, nicht ueber Regler. `Musterfuelle` (`density`), `Farbwirkung` (`colorStrength`) und `Entwurfsabstand` (`changeStrength`) sind aus der UI entfernt, weil sie beim Refinement keine verlaessliche Wirkung hatten. Sie existieren weiter in `PatternSettings` und werden mit Default-Werten gesendet; der Server schreibt `density`/`colorStrength` nur dann in den Prompt, wenn der Wert klar vom Neutralbereich abweicht.
+- Die drei Ansichts-Regler sind rein CSS-basiert und nur in der Stoffbahn-Ansicht aktiv (in anderen Ansichten ausgegraut/`disabled`):
+  - `Rapportmass` (`repeatSize`): aendert `background-size`, erzeugt keine neue Kachel; Anzeige in cm/m.
+  - `Horizontaler Versatz` (`offsetX`, 0-100) und `Vertikaler Versatz` (`offsetY`, 0-100): aendern `background-position-x/y` in `makeFabricStyle`, um das Muster in der Stoffbahn zu verschieben. Reiner Vorschau-Effekt, kein KI-Signal.
+- `scale`/`Motivgroesse` ist vollstaendig entfernt; das Feld wird im Payload toleriert, aber serverseitig nicht mehr ausgewertet.
 
 Nicht wieder als Regler einfuehren, solange sie nicht wirklich sinnvoll mit KI-Bildgenerierung verbunden sind:
 
+- `Musterfuelle`/`Farbwirkung`/`Entwurfsabstand` als sichtbare Regler: wurden bewusst zugunsten des Prompt-Chats ausgeblendet. Nur zuruecksichtbar machen, wenn ihre KI-Wirkung verlaesslich nachgewiesen ist.
 - `Motivgroesse`: wurde entfernt, weil sie sich konzeptuell mit dem Rapport-Zoom ueberschneidet und kein klar eigenstaendiges KI-Signal liefert.
 - lokale Drehung
 - lokaler Kontrast
@@ -89,7 +91,7 @@ Farblogik:
 - Farbpaletten werden als Hex-Werte an den Server gesendet.
 - Der Server uebergibt die Palette textlich im Prompt (das Modell hat keinen separaten Farbparameter).
 - Beim initialen Flow kann eine gewuenschte Farbanzahl (`auto`, 2-6) gesetzt werden; nach der Generierung wird die sichtbare Palette aus der erzeugten Kachel analysiert.
-- Farbwechsel auf eine bestehende Kachel soll ueber `Refinement anwenden` laufen, damit die KI die vorhandene Kachel neu einfaerbt statt nur CSS-Filter zu verwenden.
+- Farbwechsel auf eine bestehende Kachel laufen ueber den Prompt-Chat (z. B. "in Blautoenen umfaerben"), der eine neue Kachel erzeugt, statt CSS-Filter auf die bestehende Kachel anzuwenden.
 
 ## UI- und Textkonventionen
 
@@ -108,8 +110,9 @@ Farblogik:
 - `server/index.mjs` ist ESM und nutzt Node/Express ohne TypeScript-Transpile-Schritt.
 - API-Fehler sollen JSON mit `error` liefern und keine internen Secrets enthalten. fal-Fehler werden ueber `extractFalError()` in eine verstaendliche Meldung uebersetzt.
 - Prompt-Anpassungen muessen die Kernanforderung erhalten: quadratische, nahtlos kachelbare, flache Stoffmuster-Kachel ohne Mockup, Rand, Perspektive oder Schatten.
-- Bei initialer Generierung wird `prompt` ohne `image_url` gesendet (text-to-image).
-- Bei Refinement wird zusaetzlich `image_url` (bestehende Kachel) und `strength` (aus `changeStrength`) gesendet (img2img).
+- Der zusammengesetzte Prompt ist bewusst fokussiert: Boilerplate-Zeilen (Dichte/Farben) nur bei klarer Abweichung vom Neutralbereich einfuegen; die aktuelle Nutzeranweisung (`emphasis`) steht als letzter, hervorgehobener Block fuer maximale Gewichtung. Diese Reihenfolge beim Erweitern beibehalten.
+- Bei initialer Generierung (auch beim Prompt-Chat-Refinement) wird `prompt` ohne `image_url` gesendet (text-to-image); `emphasis` ist optional und enthaelt die juengste Einzelanweisung.
+- Der ungenutzte img2img-Pfad (`mode: 'refine'`) sendet zusaetzlich `image_url` (bestehende Kachel) und `strength` (aus `changeStrength`).
 - Die Antwort von fal liefert das Bild unter `images[0].url`; mit `sync_mode: true` ist das eine `data:image/...;base64,...`-URI, mit der Frontend und Export umgehen koennen.
 
 ## Arbeitsregeln fuer Aenderungen

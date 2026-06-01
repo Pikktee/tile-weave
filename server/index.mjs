@@ -122,10 +122,10 @@ app.post('/api/generate-pattern', async (req, res) => {
     colors,
     colorCount,
     density = 56,
-    scale = 50,
     colorStrength = 62,
     changeStrength = 34,
     mode = 'initial',
+    emphasis,
     referenceImage,
   } = req.body ?? {};
 
@@ -138,24 +138,22 @@ app.post('/api/generate-pattern', async (req, res) => {
         ? palette.length
         : null;
     const isRefinement = mode === 'refine' && typeof referenceImage === 'string' && referenceImage.length > 0;
-    const densityInstruction =
+    // Dichte und Farbintensität nur dann in den Prompt schreiben, wenn sie klar vom
+    // neutralen Mittelbereich abweichen. Steht ein Wert im Mittelfeld (z. B. weil der
+    // Regler in der UI ausgeblendet ist und auf Default bleibt), erzeugt er nur
+    // Boilerplate, die mit den eigentlichen Motiv- und Anpassungsanweisungen konkurriert.
+    const densityLine =
       density < 34
-        ? 'luftiger Rapport mit viel ruhiger Fläche und wenigen Motiven'
+        ? 'Dichte: luftiger Rapport mit viel ruhiger Fläche und wenigen Motiven.'
         : density > 72
-          ? 'dichter Rapport mit vielen Motiven und hoher Flächenfüllung'
-          : 'ausgewogener Rapport mit klarer Flächenverteilung';
-    const scaleInstruction =
-      scale < 34
-        ? 'kleine Motive mit feiner Wiederholung'
-        : scale > 72
-          ? 'große Motive mit plakativer Wirkung'
-          : 'mittelgroße Motive mit gut lesbarem Rhythmus';
-    const colorInstruction =
+          ? 'Dichte: dichter Rapport mit vielen Motiven und hoher Flächenfüllung.'
+          : '';
+    const colorLine =
       colorStrength < 34
-        ? 'gedämpfte, sanfte Farbumsetzung; Palette nur zurückhaltend einsetzen'
+        ? 'Farben: gedämpfte, sanfte Umsetzung; Palette nur zurückhaltend einsetzen.'
         : colorStrength > 72
-          ? 'kräftige, palette-treue Farbumsetzung; die angegebenen Farben klar wiedererkennbar verwenden'
-          : 'ausgewogene Farbumsetzung mit erkennbarer Nähe zur Palette';
+          ? 'Farben: kräftige, palette-treue Umsetzung; angegebene Farben klar wiedererkennbar.'
+          : '';
     const refineInstruction =
       changeStrength < 22
         ? 'Sehr nah an der Referenz bleiben: Rapport, Motivformen, Motivanzahl und Komposition erhalten; nur Farbe, Sauberkeit und kleine Details anpassen.'
@@ -164,6 +162,8 @@ app.post('/api/generate-pattern', async (req, res) => {
           : changeStrength < 70
             ? 'Sichtbar weiterentwickeln, aber die textile Musterlogik der Referenz bewahren; keine zufaelligen neuen Rauschmotive einfuegen.'
             : 'Mutig weiterentwickeln, dennoch als klare Variante derselben Musteridee mit erkennbarer Struktur, sauberen Motiven und nahtlosem Rapport.';
+    const emphasisText =
+      typeof emphasis === 'string' && emphasis.trim().length > 0 ? emphasis.trim().slice(0, 300) : '';
     const requestPrompt = [
       'smlstxtr, nahtlos kachelbare Musterkachel für Kleidungsstoff, seamless texture.',
       'Nur das flache Muster, keine Kleidung, kein Mockup, kein Rand, keine Perspektive, keine Schatten.',
@@ -174,16 +174,20 @@ app.post('/api/generate-pattern', async (req, res) => {
             refineInstruction,
             'Keine Rauschtextur, keine zufaelligen Pixel, keine koernigen Artefakte, kein verschwommener Hintergrund.',
           ].join(' ')
-        : 'Erzeuge die Kachel aus Beschreibung und Parametern.',
+        : 'Erzeuge die Kachel aus der folgenden Beschreibung.',
       `Motiv: ${String(prompt).slice(0, 800)}`,
       palette.length > 0 ? `Farbpalette: ${palette.join(', ')}` : '',
       paletteSize
         ? `Farbanzahl: ${paletteSize}. Verwende diese Anzahl als bewusste Entwurfsgrenze und vermeide zusätzliche dominante Farben.`
         : 'Farbwahl: automatisch aus Motiv, Stil und eventuell im Prompt genannten Farben ableiten.',
-      `Dichte: ${density}/100 (${densityInstruction}).`,
-      `Motivgröße: ${scale}/100 (${scaleInstruction}).`,
-      `Farbintensität: ${colorStrength}/100 (${colorInstruction}).`,
+      densityLine,
+      colorLine,
       'Ausgabe: eine einzelne quadratische Kachel, detailreich, drucktauglich, textile Illustration, seamless texture.',
+      // Die aktuelle Nutzeranweisung steht bewusst als letzter Block: am Promptende hat
+      // sie das stärkste Gewicht und wird nicht von der Boilerplate davor verwässert.
+      emphasisText
+        ? `Wichtigste, unbedingt deutlich sichtbar umzusetzende Anpassung: ${emphasisText}. Diese Änderung hat Vorrang vor allen anderen Details und muss eindeutig erkennbar sein.`
+        : '',
     ]
       .filter(Boolean)
       .join('\n');

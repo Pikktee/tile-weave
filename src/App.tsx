@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Ruler,
+  SendHorizontal,
   Shirt,
   Sparkles,
   Wand2,
@@ -226,9 +227,17 @@ const extractDominantPalette = async (imageUrl: string, preferredCount?: number)
   return selected.slice(0, targetCount).map(([red, green, blue]) => rgbToHex(red, green, blue));
 };
 
-const makeFabricStyle = (image: string, repeatSize: number, fabricWidth: number): CSSProperties => ({
+const makeFabricStyle = (
+  image: string,
+  repeatSize: number,
+  fabricWidth: number,
+  offsetX = 50,
+  offsetY = 50,
+): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
   backgroundSize: `${(repeatSize / fabricWidth) * 100}% auto`,
+  backgroundPositionX: `${offsetX}%`,
+  backgroundPositionY: `${offsetY}%`,
 });
 
 const makeTileStyle = (image: string): CSSProperties => ({
@@ -238,12 +247,6 @@ const makeTileStyle = (image: string): CSSProperties => ({
 const formatRapportSize = (value: number) =>
   value >= 100 ? `${(value / 100).toFixed(1).replace('.', ',')} m` : `${value} cm`;
 
-const describeChangeStrength = (value: number) => {
-  if (value < 22) return 'sehr nah';
-  if (value < 45) return 'behutsam';
-  if (value < 70) return 'sichtbar';
-  return 'mutig';
-};
 
 const clampPreviewZoom = (value: number) =>
   Math.max(minPreviewZoom, Math.min(maxPreviewZoom, Number(value.toFixed(2))));
@@ -290,6 +293,7 @@ function Slider({
   unit,
   hint,
   valueFormatter,
+  disabled,
   onChange,
 }: {
   label: string;
@@ -299,10 +303,11 @@ function Slider({
   unit?: string;
   hint?: string;
   valueFormatter?: (value: number) => string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="control">
+    <label className={`control${disabled ? ' control--disabled' : ''}`}>
       <span className="control-label-row">
         <span className="control-label">
           {label}
@@ -325,6 +330,7 @@ function Slider({
         min={min}
         max={max}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
@@ -335,11 +341,15 @@ function FabricPreview({
   image,
   repeatSize,
   fabricSize,
+  offsetX = 50,
+  offsetY = 50,
   compact = false,
 }: {
   image: string;
   repeatSize: number;
   fabricSize: FabricSize;
+  offsetX?: number;
+  offsetY?: number;
   compact?: boolean;
 }) {
   const verticalMarks = makeRulerMarks(fabricSize.height);
@@ -364,7 +374,7 @@ function FabricPreview({
           ))}
         </div>
       )}
-      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize, fabricSize.width)}>
+      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize, fabricSize.width, offsetX, offsetY)}>
         <div className="fabric-shadow" />
       </div>
       {!compact && (
@@ -619,7 +629,12 @@ function App() {
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [showNewIdeaConfirm, setShowNewIdeaConfirm] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [refinementInput, setRefinementInput] = useState('');
+  const [offsetX, setOffsetX] = useState(50);
+  const [offsetY, setOffsetY] = useState(50);
   const fabricSelectPointerFocusRef = useRef(false);
+  const promptHistoryRef = useRef<HTMLDivElement>(null);
 
   const hasTile = Boolean(tileImage);
   const showGarmentControl = viewMode === 'kleidung';
@@ -815,6 +830,10 @@ function App() {
     setPreviewTool('pan');
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
+    setPromptHistory([]);
+    setRefinementInput('');
+    setOffsetX(50);
+    setOffsetY(50);
   };
 
   const handleNewIdeaClick = () => {
@@ -825,8 +844,11 @@ function App() {
     }
   };
 
-  const generateWithAi = async (mode: GenerationMode) => {
-    const requestPrompt = prompt.trim();
+  const generateWithAi = async (
+    mode: GenerationMode,
+    options?: { promptOverride?: string; historyEntry?: string; emphasis?: string },
+  ) => {
+    const requestPrompt = (options?.promptOverride ?? prompt).trim();
     const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
     const requestBody = {
       prompt: requestPrompt,
@@ -836,6 +858,7 @@ function App() {
             colorCount: settings.colors.length,
           }
         : {}),
+      ...(options?.emphasis ? { emphasis: options.emphasis } : {}),
       density: settings.density,
       colorStrength: settings.colorStrength,
       changeStrength: settings.changeStrength,
@@ -883,11 +906,12 @@ function App() {
           name: current.length === 0 ? 'Grundmuster' : `Verfeinerung ${current.length}`,
           image: data.imageUrl,
           settings: nextSettings,
-          prompt,
+          prompt: requestPrompt,
           createdAt: formatTime(),
         },
         ...current,
       ]);
+      setPromptHistory((current) => [...current, options?.historyEntry ?? requestPrompt]);
       setMessage(`Stoffmuster wurde erzeugt. ${paletteMessage}`);
     } catch (error) {
       setMessage(
@@ -898,6 +922,17 @@ function App() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleRefinementPrompt = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const addition = refinementInput.trim();
+    if (!addition || isGenerating) return;
+    const base = prompt.trim();
+    const combined = base ? `${base}, ${addition}` : addition;
+    setPrompt(combined);
+    setRefinementInput('');
+    void generateWithAi('initial', { promptOverride: combined, historyEntry: addition, emphasis: addition });
   };
 
   const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1003,11 +1038,6 @@ function App() {
             <h1 className="panel-heading__title">Anpassungen</h1>
           </div>
 
-          <div className="prompt-summary" aria-label="Ausgangsbriefing">
-            <span>Ausgangsidee</span>
-            <p>{prompt}</p>
-          </div>
-
           <CompactPalette
             colors={settings.colors}
             onColorChange={updateColor}
@@ -1019,46 +1049,78 @@ function App() {
             <div className="label-row">
               <span>
                 <Sparkles size={16} />
-                Mustersteuerung
+                Prompt-Verlauf
               </span>
             </div>
-            <Slider
-              label="Musterfülle"
-              value={settings.density}
-              hint="Weniger = ruhige Fläche, mehr = dichter Allover-Print."
-              onChange={(value) => updateSetting('density', value)}
-            />
-            <Slider
-              label="Farbwirkung"
-              value={settings.colorStrength}
-              hint="Steuert, wie kräftig und palettentreu die KI die Farben auslegt."
-              onChange={(value) => updateSetting('colorStrength', value)}
-            />
-            <Slider
-              label="Entwurfsabstand"
-              value={settings.changeStrength}
-              hint="Niedrig bleibt nah am Muster, hoch erlaubt sichtbar neue Motive."
-              valueFormatter={(value) => describeChangeStrength(value)}
-              onChange={(value) => updateSetting('changeStrength', value)}
-            />
+            <div className="prompt-history" ref={promptHistoryRef} aria-label="Bisherige Prompts">
+              {promptHistory.map((p, i) => (
+                <p key={i} className="prompt-history__entry">
+                  {p}
+                </p>
+              ))}
+            </div>
+            <form className="prompt-chat-form" onSubmit={handleRefinementPrompt}>
+              <textarea
+                className="prompt-chat-input"
+                value={refinementInput}
+                onChange={(event) => setRefinementInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder="Ergänzung zum Prompt …"
+                rows={2}
+                disabled={isGenerating}
+                aria-label="Prompt erweitern"
+              />
+              <button
+                className="ghost-button prompt-chat-send"
+                type="submit"
+                disabled={!refinementInput.trim() || isGenerating}
+                aria-label="Prompt anwenden"
+              >
+                <SendHorizontal size={16} />
+                Prompt anwenden
+              </button>
+            </form>
+            <p className="prompt-chat-hint">
+              Eine konkrete Änderung pro Eingabe wirkt am stärksten. Jede Anwendung erzeugt eine neue Kachel.
+            </p>
+          </div>
+
+          <div className="refinement-block">
+            <div className="label-row">
+              <span>
+                <Ruler size={16} />
+                Ansicht
+              </span>
+            </div>
             <Slider
               label="Rapportmaß"
               value={settings.repeatSize}
               min={6}
               max={120}
-              hint="Vorschau-Maß pro Kachel im simulierten Stoff."
+              hint="Vorschau-Maß pro Kachel – nur in der Stoffbahn-Ansicht aktiv."
               valueFormatter={formatRapportSize}
+              disabled={viewMode !== 'stoffbahn'}
               onChange={(value) => updateSetting('repeatSize', value)}
             />
-            <button
-              className="ghost-button refine-button"
-              type="button"
-              onClick={() => generateWithAi('refine')}
-              disabled={!hasTile || isGenerating}
-            >
-              <Sparkles size={16} />
-              Refinement anwenden
-            </button>
+            <Slider
+              label="Horizontaler Versatz"
+              value={offsetX}
+              hint="Verschiebt das Muster horizontal – nur in der Stoffbahn-Ansicht aktiv."
+              disabled={viewMode !== 'stoffbahn'}
+              onChange={setOffsetX}
+            />
+            <Slider
+              label="Vertikaler Versatz"
+              value={offsetY}
+              hint="Verschiebt das Muster vertikal – nur in der Stoffbahn-Ansicht aktiv."
+              disabled={viewMode !== 'stoffbahn'}
+              onChange={setOffsetY}
+            />
           </div>
         </aside>
 
@@ -1189,7 +1251,7 @@ function App() {
             >
               {viewMode === 'stoffbahn' && (
                 <div className="fabric-view">
-                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} fabricSize={fabricSize} />
+                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} fabricSize={fabricSize} offsetX={offsetX} offsetY={offsetY} />
                 </div>
               )}
 
