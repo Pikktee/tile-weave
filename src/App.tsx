@@ -52,9 +52,9 @@ type FabricSize = {
 const minColorCount = 2;
 const maxColorCount = 6;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
-const fabricWidthOptions = [70, 90, 110, 140, 150];
-const fabricHeightOptions = [50, 100, 150, 200, 250, 300];
-const initialFabricSize: FabricSize = { width: 150, height: 100 };
+const fabricWidthOptions = [50, 100, 150, 200, 250, 300];
+const fabricHeightOptions = [70, 90, 110, 140, 150];
+const initialFabricSize: FabricSize = { width: 150, height: 110 };
 
 const minPreviewZoom = 0.5;
 const maxPreviewZoom = 2.5;
@@ -605,7 +605,7 @@ function GarmentPreview({
 
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
-  const [viewMode, setViewMode] = useState<ViewMode>('stoffbahn');
+  const [viewMode, setViewMode] = useState<ViewMode>('kachel');
   const [garmentType, setGarmentType] = useState<GarmentType>('kleid');
   const [tileImage, setTileImage] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -640,6 +640,12 @@ function App() {
   };
 
   const resetPreviewTransform = () => {
+    setPreviewTransform(initialPanZoom);
+  };
+
+  // Beim Wechsel des Bereichs Zoom/Pan auf 100 % zuruecksetzen.
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
     setPreviewTransform(initialPanZoom);
   };
 
@@ -806,7 +812,7 @@ function App() {
     setTileImage('');
     setVersions([]);
     setActiveVersionId('');
-    setViewMode('stoffbahn');
+    setViewMode('kachel');
     setPreviewTool('pan');
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
@@ -948,14 +954,14 @@ function App() {
 
         <nav className="view-tabs" aria-label="Ansicht wählen">
           {[
+            ['kachel', Layers3, 'Kachel'],
             ['stoffbahn', Ruler, 'Stoffbahn'],
             ['kleidung', Shirt, 'Kleidung'],
-            ['kachel', Layers3, 'Kachel'],
           ].map(([mode, Icon, label]) => (
             <button
               key={mode as string}
               className={viewMode === mode ? 'active' : ''}
-              onClick={() => setViewMode(mode as ViewMode)}
+              onClick={() => changeViewMode(mode as ViewMode)}
               type="button"
             >
               <Icon size={17} />
@@ -1098,6 +1104,21 @@ function App() {
                   </label>
                 </div>
               )}
+              {showGarmentControl && (
+                <div className="garment-picker" aria-label="Anwendung wählen">
+                  {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
+                    <button
+                      key={type}
+                      className={garmentType === type ? 'active' : ''}
+                      type="button"
+                      onClick={() => setGarmentType(type)}
+                    >
+                      {garmentTypes[type].label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
                 <button
                   className={isPanMode ? 'icon-button active' : 'icon-button'}
@@ -1142,22 +1163,6 @@ function App() {
                   <RotateCcw size={17} />
                 </button>
               </div>
-
-              {showGarmentControl && (
-                <div className="garment-picker" aria-label="Anwendung wählen">
-                  {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
-                    <button
-                      key={type}
-                      className={garmentType === type ? 'active' : ''}
-                      type="button"
-                      onClick={() => setGarmentType(type)}
-                    >
-                      {garmentTypes[type].label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
             </div>
           </div>
 
