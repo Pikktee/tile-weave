@@ -260,37 +260,17 @@ textarea:focus-visible {
 }
 
 .prompt-lead h1 {
-  display: grid;
-  gap: 2px;
+  display: block;
   max-width: 640px;
+  margin: 0;
   line-height: 1.08;
 }
 
 .prompt-lead h1 span {
-  color: var(--muted);
-  font-size: clamp(1.1rem, 2.2vw, 1.4rem);
-  font-weight: 700;
-}
-
-.prompt-lead h1 strong {
-  position: relative;
-  width: fit-content;
   color: var(--ink);
-  font-size: clamp(1.85rem, 4.4vw, 3rem);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-
-.prompt-lead h1 strong::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: -0.04em;
-  right: -0.05em;
-  bottom: 0.04em;
-  height: 0.22em;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(244, 91, 105, 0.18), rgba(33, 168, 163, 0.16));
+  font-size: clamp(2rem, 4.4vw, 3.1rem);
+  font-weight: 680;
+  letter-spacing: 0;
 }
 
 .prompt-field {
@@ -350,139 +330,12 @@ textarea:focus-visible {
   outline: none;
 }
 
+.prompt-input:focus-visible {
+  outline: none;
+}
+
 .prompt-input::placeholder {
   color: rgba(111, 105, 96, 0.78);
-}
-
-.start-options {
-  position: relative;
-  z-index: 5;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.start-picker {
-  position: relative;
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-
-.start-picker-label {
-  color: var(--muted);
-  font-size: 0.88rem;
-  font-weight: 800;
-}
-
-.start-picker-button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 10px 12px;
-  color: var(--ink);
-  text-align: left;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 2px 8px rgba(43, 33, 30, 0.04);
-  transition:
-    border-color 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
-}
-
-.start-picker-button:hover,
-.start-picker-button.active {
-  border-color: rgba(25, 23, 22, 0.24);
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(43, 33, 30, 0.07);
-}
-
-.start-picker-button span,
-.start-menu-option span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.start-picker-button strong,
-.start-menu-option strong {
-  color: var(--ink);
-  font-size: 0.95rem;
-}
-
-.start-picker-button small,
-.start-menu-option small {
-  color: var(--muted);
-  font-size: 0.77rem;
-  font-weight: 400;
-  line-height: 1.25;
-}
-
-.start-picker-button svg {
-  color: var(--muted);
-  transition: transform 180ms ease;
-}
-
-.start-picker-button.active svg {
-  transform: rotate(180deg);
-}
-
-.start-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 8px);
-  z-index: 30;
-  display: grid;
-  gap: 5px;
-  max-height: min(320px, 48vh);
-  overflow: auto;
-  padding: 7px;
-  border: 1px solid rgba(25, 23, 22, 0.14);
-  border-radius: 18px;
-  background: rgba(255, 252, 246, 0.98);
-  box-shadow: 0 20px 46px rgba(43, 33, 30, 0.18);
-  backdrop-filter: blur(18px);
-}
-
-.start-menu-wide {
-  width: min(460px, 100vw - 40px);
-}
-
-.start-picker-wide .start-menu {
-  left: auto;
-}
-
-.start-menu-option {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 12px;
-  min-height: 50px;
-  border: 0;
-  border-radius: 13px;
-  padding: 10px 11px;
-  color: var(--ink);
-  text-align: left;
-  background: transparent;
-}
-
-.start-menu-option:hover {
-  background: rgba(25, 23, 22, 0.06);
-}
-
-.start-menu-option.active {
-  background: rgba(33, 168, 163, 0.08);
-}
-
-.start-menu-option svg {
-  color: var(--teal);
 }
 
 .style-picker {
@@ -1807,7 +1660,6 @@ input[type="range"] {
   .top-actions,
   .tile-view,
   .garment-view,
-  .start-options,
   .style-picker > div,
   .compare-view,
   .compare-tools {

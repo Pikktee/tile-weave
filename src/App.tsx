@@ -1,8 +1,6 @@
 import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useState } from 'react';
 import {
   ArrowLeftRight,
-  Check,
-  ChevronDown,
   CircleHelp,
   Download,
   History,
@@ -23,7 +21,6 @@ import {
 
 type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
 type CompareViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
-type ColorCountPreference = 'auto' | '2' | '3' | '4' | '5' | '6';
 
 type PatternSettings = {
   density: number;
@@ -57,34 +54,6 @@ const fabricWidthCm = 150;
 const fabricVisibleLengthCm = 200;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
 
-const colorCountOptions: Record<ColorCountPreference, { label: string; description: string }> = {
-  auto: {
-    label: 'Automatisch',
-    description: '',
-  },
-  '2': {
-    label: '2 Farben',
-    description: 'Reduziert, grafisch und klar.',
-  },
-  '3': {
-    label: '3 Farben',
-    description: 'Kompakt mit einem Akzent.',
-  },
-  '4': {
-    label: '4 Farben',
-    description: 'Ausgewogen für viele textile Prints.',
-  },
-  '5': {
-    label: '5 Farben',
-    description: 'Reicher, ohne unruhig zu werden.',
-  },
-  '6': {
-    label: '6 Farben',
-    description: 'Für lebendige, illustrative Muster.',
-  },
-};
-
-const colorCountOrder: ColorCountPreference[] = ['auto', '2', '3', '4', '5', '6'];
 const minPreviewZoom = 0.5;
 const maxPreviewZoom = 2.5;
 const previewZoomStep = 0.1;
@@ -635,58 +604,6 @@ function VersionMeta({ version }: { version?: Version }) {
   );
 }
 
-function ColorCountPicker({
-  value,
-  isOpen,
-  onToggle,
-  onClose,
-  onChange,
-}: {
-  value: ColorCountPreference;
-  isOpen: boolean;
-  onToggle: () => void;
-  onClose: () => void;
-  onChange: (value: ColorCountPreference) => void;
-}) {
-  return (
-    <div className="start-picker" onBlur={(event) => {
-      const nextFocus = event.relatedTarget;
-      if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
-        onClose();
-      }
-    }}>
-      <span className="start-picker-label">Farbanzahl</span>
-      <button className={isOpen ? 'start-picker-button active' : 'start-picker-button'} type="button" onClick={onToggle}>
-        <span>
-          <strong>{colorCountOptions[value].label}</strong>
-        </span>
-        <ChevronDown size={17} />
-      </button>
-      {isOpen && (
-        <div className="start-menu" role="listbox" aria-label="Farbanzahl wählen">
-          {colorCountOrder.map((option) => (
-            <button
-              key={option}
-              className={value === option ? 'start-menu-option active' : 'start-menu-option'}
-              type="button"
-              role="option"
-              aria-selected={value === option}
-              onClick={() => onChange(option)}
-            >
-              <span>
-                <strong>{colorCountOptions[option].label}</strong>
-                {colorCountOptions[option].description && <small>{colorCountOptions[option].description}</small>}
-              </span>
-              {value === option && <Check size={16} />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
   const [viewMode, setViewMode] = useState<ViewMode>('stoffbahn');
@@ -694,8 +611,6 @@ function App() {
   const [garmentType, setGarmentType] = useState<GarmentType>('kleid');
   const [tileImage, setTileImage] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [startColorCount, setStartColorCount] = useState<ColorCountPreference>('auto');
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
   const [activeVersionId, setActiveVersionId] = useState('');
   const [compareAId, setCompareAId] = useState('');
@@ -863,8 +778,6 @@ function App() {
     setCompareBId('');
     setViewMode('stoffbahn');
     setCompareViewMode('stoffbahn');
-    setStartColorCount('auto');
-    setColorPickerOpen(false);
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
   };
@@ -872,19 +785,15 @@ function App() {
   const generateWithAi = async (mode: GenerationMode) => {
     const requestPrompt = prompt.trim();
     const previousActiveId = activeVersionId;
-    const requestedInitialColorCount =
-      mode === 'initial' && startColorCount !== 'auto' ? Number(startColorCount) : undefined;
     const referenceImage = mode === 'refine' ? await downscaleForRefine(tileImage) : undefined;
     const requestBody = {
       prompt: requestPrompt,
-      ...(mode === 'initial'
+      ...(mode === 'refine'
         ? {
-            ...(requestedInitialColorCount ? { colorCount: requestedInitialColorCount } : {}),
-          }
-        : {
             colors: settings.colors,
             colorCount: settings.colors.length,
-          }),
+          }
+        : {}),
       density: settings.density,
       colorStrength: settings.colorStrength,
       changeStrength: settings.changeStrength,
@@ -913,11 +822,8 @@ function App() {
       let paletteMessage = 'Die Arbeits-Palette wurde aus der Kachel übernommen.';
 
       try {
-        extractedColors = await extractDominantPalette(data.imageUrl, requestedInitialColorCount);
+        extractedColors = await extractDominantPalette(data.imageUrl);
       } catch {
-        if (requestedInitialColorCount) {
-          extractedColors = colorSuggestions.slice(0, requestedInitialColorCount);
-        }
         paletteMessage = 'Die automatische Farbanalyse war nicht möglich; die Palette bleibt editierbar.';
       }
 
@@ -997,26 +903,12 @@ function App() {
           <form className="start-composer" onSubmit={handleStartSubmit}>
             <div className="prompt-lead">
               <h1>
-                <span>Aus deiner Idee wird</span>
-                <strong>ein Stoffmuster</strong>
+                <span>Gestalte dein Stoffmuster mit KI</span>
               </h1>
             </div>
             <div className="prompt-field">
               <label htmlFor="start-prompt">Deine Musteridee</label>
               <PromptInput value={prompt} onChange={setPrompt} />
-            </div>
-
-            <div className="start-options" aria-label="Optionale Leitplanken">
-              <ColorCountPicker
-                value={startColorCount}
-                isOpen={colorPickerOpen}
-                onToggle={() => setColorPickerOpen((current) => !current)}
-                onClose={() => setColorPickerOpen(false)}
-                onChange={(value) => {
-                  setStartColorCount(value);
-                  setColorPickerOpen(false);
-                }}
-              />
             </div>
 
             <button
