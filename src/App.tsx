@@ -1,19 +1,24 @@
-import { type CSSProperties, type FormEvent, useEffect, useState } from 'react';
+import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useState } from 'react';
 import {
   ArrowLeftRight,
   Check,
   ChevronDown,
+  CircleHelp,
   Download,
   History,
   Layers3,
   Lightbulb,
   Minus,
+  Move,
   Palette,
   Plus,
+  RotateCcw,
   Ruler,
   Shirt,
   Sparkles,
   Wand2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 
 type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
@@ -39,9 +44,17 @@ type Version = {
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel' | 'vergleich';
 type GenerationMode = 'initial' | 'refine';
+type PanZoomState = {
+  x: number;
+  y: number;
+  zoom: number;
+};
+type PreviewTool = 'pan' | 'zoom' | null;
 
 const minColorCount = 2;
 const maxColorCount = 6;
+const fabricWidthCm = 150;
+const fabricVisibleLengthCm = 200;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
 
 const colorCountOptions: Record<ColorCountPreference, { label: string; description: string }> = {
@@ -72,6 +85,10 @@ const colorCountOptions: Record<ColorCountPreference, { label: string; descripti
 };
 
 const colorCountOrder: ColorCountPreference[] = ['auto', '2', '3', '4', '5', '6'];
+const minPreviewZoom = 0.5;
+const maxPreviewZoom = 2.5;
+const previewZoomStep = 0.1;
+const initialPanZoom: PanZoomState = { x: 0, y: 0, zoom: 1 };
 
 const palettes = [
   ['#F45B69', '#21A8A3'],
@@ -82,34 +99,29 @@ const palettes = [
 ];
 
 
-const garmentTypes: Record<GarmentType, { label: string; note: string }> = {
+const garmentTypes: Record<GarmentType, { label: string }> = {
   hemd: {
     label: 'Hemd',
-    note: 'Gut für Blusen, Hemden und kleinteilige Allover-Prints.',
   },
   kleid: {
     label: 'Kleid',
-    note: 'Zeigt Rapportwirkung über Oberkörper, Taille und Saum.',
   },
   rock: {
     label: 'Rock',
-    note: 'Prüft Motivrhythmus auf Falten und breiteren Stoffflächen.',
   },
   schal: {
     label: 'Schal',
-    note: 'Gut für Foulards, Tücher und grafische Randwirkung.',
   },
   kissen: {
     label: 'Kissen',
-    note: 'Prüft die Wirkung als Interior- oder Dekostoff.',
   },
 };
 
 const initialSettings: PatternSettings = {
   density: 58,
   colorStrength: 62,
-  changeStrength: 34,
-  repeatSize: 112,
+  changeStrength: 28,
+  repeatSize: 32,
   colors: palettes[1],
 };
 
@@ -152,9 +164,9 @@ const loadImage = (imageUrl: string) =>
   });
 
 // Verkleinert die Referenzkachel vor dem Refinement auf die Refine-Auflösung.
-// Das Refinement generiert ohnehin bei dieser Größe; eine hochauflösende Referenz
-// würde nur Upload und Serverzeit aufblähen (1024er-Referenz ~8 s vs 512er ~3 s).
-const refineReferenceSize = 512;
+// Das hält Uploads klein, ohne der img2img-Variante zu wenig Motivinformation
+// für saubere, rauscharme Änderungen zu geben.
+const refineReferenceSize = 768;
 
 const downscaleForRefine = async (imageUrl: string): Promise<string> => {
   try {
@@ -243,14 +255,27 @@ const extractDominantPalette = async (imageUrl: string, preferredCount?: number)
   return selected.slice(0, targetCount).map(([red, green, blue]) => rgbToHex(red, green, blue));
 };
 
-const makeRepeatStyle = (image: string, repeatSize: number): CSSProperties => ({
+const makeFabricStyle = (image: string, repeatSize: number): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
-  backgroundSize: `${repeatSize}px ${repeatSize}px`,
+  backgroundSize: `${(repeatSize / fabricWidthCm) * 100}% auto`,
 });
 
 const makeTileStyle = (image: string): CSSProperties => ({
   backgroundImage: image ? `url(${image})` : undefined,
 });
+
+const formatRapportSize = (value: number) =>
+  value >= 100 ? `${(value / 100).toFixed(1).replace('.', ',')} m` : `${value} cm`;
+
+const describeChangeStrength = (value: number) => {
+  if (value < 22) return 'sehr nah';
+  if (value < 45) return 'behutsam';
+  if (value < 70) return 'sichtbar';
+  return 'mutig';
+};
+
+const clampPreviewZoom = (value: number) =>
+  Math.max(minPreviewZoom, Math.min(maxPreviewZoom, Number(value.toFixed(2))));
 
 function Slider({
   label,
@@ -258,6 +283,8 @@ function Slider({
   min = 0,
   max = 100,
   unit,
+  hint,
+  valueFormatter,
   onChange,
 }: {
   label: string;
@@ -265,25 +292,95 @@ function Slider({
   min?: number;
   max?: number;
   unit?: string;
+  hint?: string;
+  valueFormatter?: (value: number) => string;
   onChange: (value: number) => void;
 }) {
   return (
     <label className="control">
-      <span>
-        {label}
+      <span className="control-label-row">
+        <span className="control-label">
+          {label}
+          {hint && (
+            <span className="control-tooltip" tabIndex={0} aria-label={hint}>
+              <CircleHelp size={14} />
+              <span className="control-tooltip-popup" role="tooltip">
+                {hint}
+              </span>
+            </span>
+          )}
+        </span>
         <strong>
-          {value}
-          {unit}
+          {valueFormatter ? valueFormatter(value) : `${value}${unit ?? ''}`}
         </strong>
       </span>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
+  );
+}
+
+function FabricPreview({
+  image,
+  repeatSize,
+  compact = false,
+}: {
+  image: string;
+  repeatSize: number;
+  compact?: boolean;
+}) {
+  const verticalMarks = [0, 50, 100, 150, 200];
+  const horizontalMarks = [0, 50, 100, 150];
+
+  return (
+    <div className={compact ? 'fabric-measure compact' : 'fabric-measure'}>
+      <div className="fabric-ruler vertical" aria-hidden="true">
+        {verticalMarks.map((mark) => (
+          <span
+            key={mark}
+            style={{
+              top:
+                mark === 0
+                  ? '10px'
+                  : mark === fabricVisibleLengthCm
+                    ? 'calc(100% - 10px)'
+                    : `${(mark / fabricVisibleLengthCm) * 100}%`,
+            }}
+          >
+            {mark === 200 ? '2,0 m' : `${mark} cm`}
+          </span>
+        ))}
+      </div>
+      <div className="fabric-roll" style={makeFabricStyle(image, repeatSize)}>
+        <div className="fabric-shadow" />
+      </div>
+      <div className="fabric-ruler horizontal" aria-hidden="true">
+        {horizontalMarks.map((mark) => (
+          <span
+            key={mark}
+            style={{
+              left:
+                mark === 0
+                  ? '18px'
+                  : mark === fabricWidthCm
+                    ? 'calc(100% - 18px)'
+                    : `${(mark / fabricWidthCm) * 100}%`,
+            }}
+          >
+            {mark} cm
+          </span>
+        ))}
+      </div>
+      <p className="fabric-scale-note">
+        Maßband-Simulation: {fabricWidthCm} cm Stoffbreite, 2,0 m Ansichts-Länge
+      </p>
+    </div>
   );
 }
 
@@ -417,11 +514,91 @@ function GarmentPreview({
   garmentType: GarmentType;
   compact?: boolean;
 }) {
+  const rawPatternId = useId();
+  const patternId = `garment-${rawPatternId.replace(/:/g, '')}`;
+  const tileSize = Math.max(36, Math.round(repeatSize * 4));
+  const patternFill = `url(#${patternId})`;
+  const shadeFill = `url(#${patternId}-soft-light)`;
+
+  const patternDefs = (
+    <defs>
+      <pattern id={patternId} width={tileSize} height={tileSize} patternUnits="userSpaceOnUse">
+        <image href={image} width={tileSize} height={tileSize} preserveAspectRatio="xMidYMid slice" />
+      </pattern>
+      <linearGradient id={`${patternId}-soft-light`} x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
+        <stop offset="0.5" stopColor="#ffffff" stopOpacity="0" />
+        <stop offset="1" stopColor="#161514" stopOpacity="0.16" />
+      </linearGradient>
+    </defs>
+  );
+
+  const renderGarment = () => {
+    switch (garmentType) {
+      case 'hemd':
+        return (
+          <>
+            <path className="garment-fill" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={patternFill} />
+            <path className="garment-cutout" d="M180 96 Q210 137 240 96 L252 96 Q239 155 210 164 Q181 155 168 96 Z" />
+            <path className="garment-detail" d="M132 135 L168 96 M288 135 L252 96 M210 162 L210 520 M130 240 L130 520 M290 240 L290 520" />
+            <path className="garment-shade" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={shadeFill} />
+            {[215, 255, 295, 335].map((cy) => (
+              <circle key={cy} className="garment-button" cx="210" cy={cy} r="4" />
+            ))}
+          </>
+        );
+      case 'kleid':
+        return (
+          <>
+            <path className="garment-fill" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={patternFill} />
+            <path className="garment-fill" d="M154 126 C105 138 78 181 82 234 C112 242 142 223 158 190 Z" fill={patternFill} />
+            <path className="garment-fill" d="M266 126 C315 138 342 181 338 234 C308 242 278 223 262 190 Z" fill={patternFill} />
+            <path className="garment-cutout" d="M177 104 Q210 147 243 104 Q232 165 210 173 Q188 165 177 104 Z" />
+            <path className="garment-detail" d="M132 228 L288 228 M160 245 C190 270 230 270 260 245 M160 245 L116 538 M210 248 L210 538 M260 245 L304 538" />
+            <path className="garment-shade" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={shadeFill} />
+          </>
+        );
+      case 'rock':
+        return (
+          <>
+            <path className="garment-fill" d="M145 110 L275 110 L338 520 Q210 548 82 520 Z" fill={patternFill} />
+            <path className="garment-fill garment-band" d="M138 82 H282 Q292 82 292 94 V128 H128 V94 Q128 82 138 82 Z" fill={patternFill} />
+            <path className="garment-detail" d="M128 128 H292 M145 110 C154 230 137 384 104 520 M210 128 V536 M275 110 C266 230 283 384 316 520" />
+            <path className="garment-shade" d="M145 110 L275 110 L338 520 Q210 548 82 520 Z" fill={shadeFill} />
+          </>
+        );
+      case 'schal':
+        return (
+          <>
+            <path className="garment-fill" d="M154 28 Q228 10 278 58 L252 535 Q202 555 142 514 Z" fill={patternFill} />
+            <path className="garment-detail" d="M154 28 Q205 64 278 58 M142 514 Q198 486 252 535" />
+            <path className="garment-shade" d="M154 28 Q228 10 278 58 L252 535 Q202 555 142 514 Z" fill={shadeFill} />
+          </>
+        );
+      case 'kissen':
+        return (
+          <>
+            <rect className="garment-fill" x="70" y="95" width="280" height="280" rx="42" fill={patternFill} />
+            <path className="garment-detail" d="M94 122 Q210 85 326 122 M94 348 Q210 385 326 348 M96 128 Q62 235 96 342 M324 128 Q358 235 324 342" />
+            <path className="garment-shade" d="M70 95 H350 V375 H70 Z" fill={shadeFill} />
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className={compact ? 'garment-preview compact' : 'garment-preview'}>
-      <div className={`garment garment-${garmentType}`} style={makeRepeatStyle(image, repeatSize)}>
-        {(garmentType === 'hemd' || garmentType === 'kleid') && <div className="neckline" />}
-      </div>
+      <svg
+        className={`garment-svg garment-${garmentType}`}
+        viewBox="0 0 420 560"
+        role="img"
+        aria-label={`${garmentTypes[garmentType].label} mit aktuellem Muster`}
+      >
+        {patternDefs}
+        {renderGarment()}
+      </svg>
     </div>
   );
 }
@@ -442,12 +619,16 @@ function VersionMeta({ version }: { version?: Version }) {
       </div>
       <dl>
         <div>
-          <dt>Dichte</dt>
+          <dt>Musterfülle</dt>
           <dd>{version.settings.density}</dd>
         </div>
         <div>
-          <dt>Farbintensität</dt>
+          <dt>Farbwirkung</dt>
           <dd>{version.settings.colorStrength}</dd>
+        </div>
+        <div>
+          <dt>Rapport</dt>
+          <dd>{formatRapportSize(version.settings.repeatSize)}</dd>
         </div>
       </dl>
     </div>
@@ -522,17 +703,118 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>('initial');
   const [message, setMessage] = useState('Idee eingeben und erstes Stoffmuster erzeugen.');
+  const [previewTransform, setPreviewTransform] = useState<PanZoomState>(initialPanZoom);
+  const [previewTool, setPreviewTool] = useState<PreviewTool>(null);
+  const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
 
   const hasTile = Boolean(tileImage);
-  const bgStyle = makeRepeatStyle(tileImage, settings.repeatSize);
   const compareA = versions.find((version) => version.id === compareAId) || versions[1] || versions[0];
   const compareB = versions.find((version) => version.id === compareBId) || versions[0] || compareA;
-  const showRepeatControl =
-    viewMode === 'stoffbahn' || viewMode === 'kleidung' || (viewMode === 'vergleich' && compareViewMode !== 'kachel');
   const showGarmentControl = viewMode === 'kleidung' || (viewMode === 'vergleich' && compareViewMode === 'kleidung');
+  const isPanMode = previewTool === 'pan';
+  const isZoomMode = previewTool === 'zoom';
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const updatePreviewZoom = (nextZoom: number) => {
+    setPreviewTransform((current) => ({ ...current, zoom: clampPreviewZoom(nextZoom) }));
+  };
+
+  const nudgePreview = (deltaX: number, deltaY: number) => {
+    setPreviewTransform((current) => ({ ...current, x: current.x + deltaX, y: current.y + deltaY }));
+  };
+
+  const resetPreviewTransform = () => {
+    setPreviewTransform(initialPanZoom);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'h') {
+        event.preventDefault();
+        setPreviewTool('pan');
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        setPreviewTool('zoom');
+        return;
+      }
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        updatePreviewZoom(previewTransform.zoom + previewZoomStep);
+        return;
+      }
+
+      if (event.key === '-') {
+        event.preventDefault();
+        updatePreviewZoom(previewTransform.zoom - previewZoomStep);
+        return;
+      }
+
+      if (event.key === '0') {
+        event.preventDefault();
+        resetPreviewTransform();
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        const step = event.shiftKey ? 48 : 18;
+        if (event.key === 'ArrowLeft') nudgePreview(-step, 0);
+        if (event.key === 'ArrowRight') nudgePreview(step, 0);
+        if (event.key === 'ArrowUp') nudgePreview(0, -step);
+        if (event.key === 'ArrowDown') nudgePreview(0, step);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewTransform.zoom]);
+
+  const startPreviewInteraction = (event: PointerEvent<HTMLDivElement>) => {
+    if (isZoomMode && event.button === 0) {
+      updatePreviewZoom(previewTransform.zoom + (event.altKey ? -previewZoomStep : previewZoomStep));
+      return;
+    }
+
+    if (!isPanMode && event.button !== 1) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPanStart({
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      originX: previewTransform.x,
+      originY: previewTransform.y,
+    });
+  };
+
+  const movePreviewPan = (event: PointerEvent<HTMLDivElement>) => {
+    if (!panStart) return;
+
+    setPreviewTransform((current) => ({
+      ...current,
+      x: panStart.originX + event.clientX - panStart.pointerX,
+      y: panStart.originY + event.clientY - panStart.pointerY,
+    }));
+  };
+
+  const stopPreviewPan = () => {
+    setPanStart(null);
   };
 
   const updateColor = (index: number, color: string) => {
@@ -686,14 +968,12 @@ function App() {
       <article className="compare-pane">
         <span className="compare-label">Version {side}</span>
         {compareViewMode === 'kachel' && (
-          <div className="compare-tile" style={makeTileStyle(image)}>
-            <span>Musterkachel</span>
+          <div className="compare-tile">
+            <img src={image} alt={`Musterkachel Version ${side}`} />
           </div>
         )}
         {compareViewMode === 'stoffbahn' && (
-          <div className="compare-fabric" style={makeRepeatStyle(image, settings.repeatSize)}>
-            <span>Stoffbahn</span>
-          </div>
+          <FabricPreview image={image} repeatSize={settings.repeatSize} compact />
         )}
         {compareViewMode === 'kleidung' && (
           <GarmentPreview image={image} repeatSize={settings.repeatSize} garmentType={garmentType} compact />
@@ -760,7 +1040,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell refinement-shell">
       <header className="topbar">
         <a className="brand" href="/" aria-label="Tile Weave Start">
           <img src="/logo.svg" alt="" />
@@ -834,19 +1114,32 @@ function App() {
               </span>
             </div>
             <Slider
-              label="Dichte"
+              label="Musterfülle"
               value={settings.density}
+              hint="Weniger = ruhige Fläche, mehr = dichter Allover-Print."
               onChange={(value) => updateSetting('density', value)}
             />
             <Slider
-              label="Farbintensität"
+              label="Farbwirkung"
               value={settings.colorStrength}
+              hint="Steuert, wie kräftig und palettentreu die KI die Farben auslegt."
               onChange={(value) => updateSetting('colorStrength', value)}
             />
             <Slider
-              label="Änderungsstärke"
+              label="Entwurfsabstand"
               value={settings.changeStrength}
+              hint="Niedrig bleibt nah am Muster, hoch erlaubt sichtbar neue Motive."
+              valueFormatter={(value) => describeChangeStrength(value)}
               onChange={(value) => updateSetting('changeStrength', value)}
+            />
+            <Slider
+              label="Rapportmaß"
+              value={settings.repeatSize}
+              min={6}
+              max={120}
+              hint="Vorschau-Maß pro Kachel im simulierten Stoff."
+              valueFormatter={formatRapportSize}
+              onChange={(value) => updateSetting('repeatSize', value)}
             />
             <button
               className="ghost-button refine-button"
@@ -863,7 +1156,6 @@ function App() {
         <section className="preview-stage" aria-live="polite">
           <div className="preview-header">
             <div>
-              <p className="eyebrow">Anwendung</p>
               <h2>
                 {viewMode === 'kachel'
                   ? 'Kachel prüfen'
@@ -873,9 +1165,73 @@ function App() {
                       ? 'Kleidung und Objekt'
                       : 'Versionen vergleichen'}
               </h2>
+              <small>Hand mit H, Zoom mit Z. Alt-Klick zoomt heraus, 0 setzt die Ansicht zurück.</small>
             </div>
 
             <div className="preview-tools">
+              <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
+                <button
+                  className={isPanMode ? 'icon-button active' : 'icon-button'}
+                  type="button"
+                  onClick={() => setPreviewTool((current) => (current === 'pan' ? null : 'pan'))}
+                  aria-pressed={isPanMode}
+                  aria-label="Panning aktivieren"
+                  title="Hand-Werkzeug (H)"
+                >
+                  <Move size={17} />
+                </button>
+                <button
+                  className={isZoomMode ? 'icon-button active' : 'icon-button'}
+                  type="button"
+                  onClick={() => setPreviewTool((current) => (current === 'zoom' ? null : 'zoom'))}
+                  aria-pressed={isZoomMode}
+                  aria-label="Zoom-Modus aktivieren"
+                  title="Zoom-Werkzeug (Z), Alt-Klick verkleinert"
+                >
+                  <ZoomIn size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => updatePreviewZoom(previewTransform.zoom - previewZoomStep)}
+                  aria-label="Verkleinern"
+                  title="Verkleinern (-)"
+                >
+                  <ZoomOut size={17} />
+                </button>
+                <label className="zoom-control">
+                  <span>Zoom</span>
+                  <input
+                    type="range"
+                    min={minPreviewZoom}
+                    max={maxPreviewZoom}
+                    step="0.01"
+                    value={previewTransform.zoom}
+                    onChange={(event) => updatePreviewZoom(Number(event.target.value))}
+                    aria-label="Zoom der Arbeitsfläche"
+                  />
+                  <strong>{Math.round(previewTransform.zoom * 100)}%</strong>
+                </label>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => updatePreviewZoom(previewTransform.zoom + previewZoomStep)}
+                  aria-label="Vergrößern"
+                  title="Vergrößern (+)"
+                >
+                  <ZoomIn size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={resetPreviewTransform}
+                  aria-label="Ansicht zurücksetzen"
+                  title="Ansicht zurücksetzen (0)"
+                >
+                  <RotateCcw size={17} />
+                </button>
+              </div>
+
               {viewMode === 'vergleich' && (
                 <div className="compare-tools">
                   <label>
@@ -932,55 +1288,63 @@ function App() {
                 </div>
               )}
 
-              {showRepeatControl && (
-                <Slider
-                  label="Rapportgröße"
-                  value={settings.repeatSize}
-                  min={72}
-                  max={180}
-                  unit=" px"
-                  onChange={(value) => updateSetting('repeatSize', value)}
-                />
-              )}
             </div>
           </div>
 
-          <div className="stage-body">
-            {viewMode === 'stoffbahn' && (
-              <div className="fabric-view">
-                <div className="fabric-roll" style={bgStyle}>
-                  <div className="fabric-shadow" />
+          <div
+            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}`}
+            onPointerDown={startPreviewInteraction}
+            onPointerMove={movePreviewPan}
+            onPointerUp={stopPreviewPan}
+            onPointerCancel={stopPreviewPan}
+            onLostPointerCapture={stopPreviewPan}
+          >
+            <div
+              className="pan-zoom-content"
+              style={{
+                transform: `translate3d(${previewTransform.x}px, ${previewTransform.y}px, 0) scale(${previewTransform.zoom})`,
+              }}
+            >
+              {viewMode === 'stoffbahn' && (
+                <div className="fabric-view">
+                  <FabricPreview image={tileImage} repeatSize={settings.repeatSize} />
                 </div>
-              </div>
-            )}
+              )}
 
-            {viewMode === 'kleidung' && (
-              <div className="garment-view">
-                <GarmentPreview image={tileImage} repeatSize={settings.repeatSize} garmentType={garmentType} />
-                <div className="garment-notes">
-                  <h2>{garmentTypes[garmentType].label}</h2>
-                  <p>{garmentTypes[garmentType].note}</p>
+              {viewMode === 'kleidung' && (
+                <div className="garment-view">
+                  <GarmentPreview image={tileImage} repeatSize={settings.repeatSize} garmentType={garmentType} />
                 </div>
-              </div>
-            )}
+              )}
 
-            {viewMode === 'kachel' && (
-              <div className="tile-view">
-                <div className="tile-focus" style={makeTileStyle(tileImage)}>
-                  <span>Musterkachel</span>
+              {viewMode === 'kachel' && (
+                <div className="tile-view">
+                  <article className="tile-card">
+                    <div className="tile-card-header">
+                      <h3>Originalkachel</h3>
+                      <span>1 Rapport</span>
+                    </div>
+                    <div className="tile-focus">
+                      <img src={tileImage} alt="Originale quadratische Musterkachel" />
+                    </div>
+                  </article>
+                  <article className="tile-card">
+                    <div className="tile-card-header">
+                      <h3>Nahtprüfung</h3>
+                      <span>3 x 3 Wiederholung</span>
+                    </div>
+                    <div className="tile-repeat-grid" style={makeTileStyle(tileImage)} />
+                  </article>
                 </div>
-                <div className="tile-repeat-grid" style={bgStyle}>
-                  <span>3 x 3 Rapportprüfung</span>
-                </div>
-              </div>
-            )}
+              )}
 
-            {viewMode === 'vergleich' && (
-              <div className="compare-view">
-                {renderComparePane(compareA, 'A')}
-                {renderComparePane(compareB, 'B')}
-              </div>
-            )}
+              {viewMode === 'vergleich' && (
+                <div className="compare-view">
+                  {renderComparePane(compareA, 'A')}
+                  {renderComparePane(compareB, 'B')}
+                </div>
+              )}
+            </div>
           </div>
 
           {isGenerating && <LoadingOverlay mode={generationMode} />}
