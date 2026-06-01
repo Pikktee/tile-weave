@@ -1,22 +1,26 @@
-import { useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, useState } from 'react';
 import {
   ArrowLeftRight,
-  Bot,
   Check,
+  ChevronDown,
   Download,
-  Eye,
   History,
   Layers3,
+  Lightbulb,
+  Minus,
   Palette,
+  Plus,
   Ruler,
-  Save,
-  Scissors,
   Shirt,
   Sparkles,
   Wand2,
 } from 'lucide-react';
 
-type Motif = 'botanik' | 'geo' | 'atelier' | 'linie';
+type FabricStyle = 'frei' | 'kleiderdruck' | 'seidenfoulard' | 'leinenprint' | 'jacquard';
+type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
+type CompareViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
+type ColorCountPreference = 'auto' | '2' | '3' | '4' | '5' | '6';
+type StartPicker = 'colors' | 'style';
 
 type PatternSettings = {
   density: number;
@@ -24,7 +28,6 @@ type PatternSettings = {
   colorStrength: number;
   changeStrength: number;
   repeatSize: number;
-  motif: Motif;
   colors: string[];
 };
 
@@ -34,24 +37,110 @@ type Version = {
   image: string;
   settings: PatternSettings;
   prompt: string;
+  fabricStyle: FabricStyle;
   createdAt: string;
 };
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel' | 'vergleich';
 type GenerationMode = 'initial' | 'refine';
 
+const minColorCount = 2;
+const maxColorCount = 6;
+const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
+
+const colorCountOptions: Record<ColorCountPreference, { label: string; description: string }> = {
+  auto: {
+    label: 'Automatisch',
+    description: '',
+  },
+  '2': {
+    label: '2 Farben',
+    description: 'Reduziert, grafisch und klar.',
+  },
+  '3': {
+    label: '3 Farben',
+    description: 'Kompakt mit einem Akzent.',
+  },
+  '4': {
+    label: '4 Farben',
+    description: 'Ausgewogen für viele textile Prints.',
+  },
+  '5': {
+    label: '5 Farben',
+    description: 'Reicher, ohne unruhig zu werden.',
+  },
+  '6': {
+    label: '6 Farben',
+    description: 'Für lebendige, illustrative Muster.',
+  },
+};
+
+const colorCountOrder: ColorCountPreference[] = ['auto', '2', '3', '4', '5', '6'];
+
 const palettes = [
+  ['#F45B69', '#21A8A3'],
   ['#F45B69', '#21A8A3', '#F7D66B', '#161514'],
-  ['#E23D5A', '#0B6E69', '#F4EFE6', '#2B211E'],
+  ['#E23D5A', '#0B6E69', '#F4EFE6', '#2B211E', '#F7D66B'],
   ['#2F7D5F', '#E7A9B5', '#F2D47D', '#0E1F1C'],
-  ['#1D5C8A', '#EDC85E', '#E86642', '#F7F1E3'],
+  ['#1D5C8A', '#EDC85E', '#E86642', '#F7F1E3', '#21A8A3', '#161514'],
 ];
 
-const motifLabels: Record<Motif, string> = {
-  botanik: 'Botanik',
-  geo: 'Geometrie',
-  atelier: 'Atelier',
-  linie: 'Linien',
+const fabricStyles: Record<
+  FabricStyle,
+  { label: string; description: string; promptAddition: string }
+> = {
+  frei: {
+    label: 'Automatisch',
+    description: '',
+    promptAddition: '',
+  },
+  kleiderdruck: {
+    label: 'Kleiderdruck',
+    description: 'klarer Allover-Print für Blusen, Röcke und Sommerkleider',
+    promptAddition:
+      'Stil: modischer Kleiderstoff als klarer Allover-Print, gut lesbar auf Blusen, Röcken und Sommerkleidern.',
+  },
+  seidenfoulard: {
+    label: 'Seidenfoulard',
+    description: 'fein, elegant, mit grafischer Präzision und fließendem Rhythmus',
+    promptAddition:
+      'Stil: eleganter Seidenfoulard mit feiner grafischer Präzision, fließendem Rhythmus und hochwertiger Druckanmutung.',
+  },
+  leinenprint: {
+    label: 'Leinenprint',
+    description: 'organisch, handgedruckt, etwas luftiger und textiler',
+    promptAddition:
+      'Stil: luftiger Leinenprint mit handgedruckter, organischer Textur und angenehm natürlicher Stoffwirkung.',
+  },
+  jacquard: {
+    label: 'Jacquard',
+    description: 'dichter, ornamentaler Rapport mit gewebter Anmutung',
+    promptAddition:
+      'Stil: dichter ornamentaler Jacquard-Rapport mit gewebter Anmutung, ohne fotorealistisches Mockup.',
+  },
+};
+
+const garmentTypes: Record<GarmentType, { label: string; note: string }> = {
+  hemd: {
+    label: 'Hemd',
+    note: 'Gut für Blusen, Hemden und kleinteilige Allover-Prints.',
+  },
+  kleid: {
+    label: 'Kleid',
+    note: 'Zeigt Rapportwirkung über Oberkörper, Taille und Saum.',
+  },
+  rock: {
+    label: 'Rock',
+    note: 'Prüft Motivrhythmus auf Falten und breiteren Stoffflächen.',
+  },
+  schal: {
+    label: 'Schal',
+    note: 'Gut für Foulards, Tücher und grafische Randwirkung.',
+  },
+  kissen: {
+    label: 'Kissen',
+    note: 'Prüft die Wirkung als Interior- oder Dekostoff.',
+  },
 };
 
 const initialSettings: PatternSettings = {
@@ -60,8 +149,7 @@ const initialSettings: PatternSettings = {
   colorStrength: 62,
   changeStrength: 34,
   repeatSize: 112,
-  motif: 'botanik',
-  colors: palettes[0],
+  colors: palettes[1],
 };
 
 const formatTime = () =>
@@ -76,6 +164,108 @@ const downloadImage = (imageUrl: string, filename: string) => {
   link.download = filename;
   link.click();
 };
+
+const buildAiPrompt = (prompt: string, fabricStyle: FabricStyle) =>
+  [prompt.trim(), fabricStyles[fabricStyle].promptAddition].filter(Boolean).join('\n');
+
+const clampColorCount = (count: number) => Math.max(minColorCount, Math.min(maxColorCount, count));
+
+const rgbToHex = (red: number, green: number, blue: number) =>
+  `#${[red, green, blue].map((value) => Math.round(value).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+
+const colorDistance = (a: number[], b: number[]) =>
+  Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+const colorSaturation = ([red, green, blue]: number[]) => {
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+
+  return max === 0 ? 0 : (max - min) / max;
+};
+
+const loadImage = (imageUrl: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Bild konnte nicht für die Farbanalyse geladen werden.'));
+    image.src = imageUrl;
+  });
+
+const extractDominantPalette = async (imageUrl: string, preferredCount?: number) => {
+  const image = await loadImage(imageUrl);
+  const canvas = document.createElement('canvas');
+  const size = 96;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+
+  if (!context) throw new Error('Farbanalyse ist in diesem Browser nicht verfügbar.');
+
+  canvas.width = size;
+  canvas.height = size;
+  context.drawImage(image, 0, 0, size, size);
+
+  const pixels = context.getImageData(0, 0, size, size).data;
+  const bins = new Map<string, { count: number; red: number; green: number; blue: number }>();
+
+  for (let index = 0; index < pixels.length; index += 16) {
+    const alpha = pixels[index + 3];
+    if (alpha < 180) continue;
+
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+    const key = [red, green, blue].map((value) => Math.round(value / 24) * 24).join('-');
+    const bin = bins.get(key) ?? { count: 0, red: 0, green: 0, blue: 0 };
+    bin.count += 1;
+    bin.red += red;
+    bin.green += green;
+    bin.blue += blue;
+    bins.set(key, bin);
+  }
+
+  const total = [...bins.values()].reduce((sum, bin) => sum + bin.count, 0);
+  const candidates = [...bins.values()]
+    .map((bin) => {
+      const rgb = [bin.red / bin.count, bin.green / bin.count, bin.blue / bin.count];
+      return {
+        rgb,
+        count: bin.count,
+        weight: bin.count * (0.72 + colorSaturation(rgb)),
+      };
+    })
+    .filter((candidate) => total === 0 || candidate.count / total > 0.004)
+    .sort((a, b) => b.weight - a.weight);
+
+  const inferredCount =
+    preferredCount ??
+    clampColorCount(candidates.filter((candidate) => total === 0 || candidate.count / total > 0.035).length);
+  const targetCount = clampColorCount(inferredCount);
+  const selected: number[][] = [];
+
+  for (const minimumDistance of [58, 46, 34, 22]) {
+    for (const candidate of candidates) {
+      if (selected.length >= targetCount) break;
+      if (selected.some((color) => colorDistance(color, candidate.rgb) < minimumDistance)) continue;
+      selected.push(candidate.rgb);
+    }
+    if (selected.length >= targetCount) break;
+  }
+
+  if (selected.length < minColorCount) {
+    return colorSuggestions.slice(0, targetCount);
+  }
+
+  return selected.slice(0, targetCount).map(([red, green, blue]) => rgbToHex(red, green, blue));
+};
+
+const makeRepeatStyle = (image: string, repeatSize: number): CSSProperties => ({
+  backgroundImage: image ? `url(${image})` : undefined,
+  backgroundSize: `${repeatSize}px ${repeatSize}px`,
+});
+
+const makeTileStyle = (image: string): CSSProperties => ({
+  backgroundImage: image ? `url(${image})` : undefined,
+});
 
 function Slider({
   label,
@@ -121,8 +311,246 @@ function LoadingOverlay({ mode }: { mode: GenerationMode }) {
         <span />
         <span />
       </div>
-      <strong>{mode === 'initial' ? 'KI erzeugt die Muster-Kachel' : 'KI verfeinert die Kachel'}</strong>
-      <small>Das Bildmodell berechnet einen nahtlosen Rapport.</small>
+      <strong>{mode === 'initial' ? 'Dein Stoffmuster entsteht' : 'Dein Stoffmuster wird verfeinert'}</strong>
+      <small>
+        {mode === 'initial'
+          ? 'Einen Moment, dein Muster wird gestaltet.'
+          : 'Einen Moment, deine Änderungen werden eingearbeitet.'}
+      </small>
+    </div>
+  );
+}
+
+function PromptInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="prompt-input-shell">
+      <textarea
+        id="start-prompt"
+        className="prompt-input"
+        aria-label="Musteridee für das Stoffmuster"
+        placeholder="z. B. Tropische Blätter, einzelne Hibiskusblüten, klare Konturen, warme Korall- und Türkistöne, Stoffdruck für Sommerkleider"
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </div>
+  );
+}
+
+function CompactPalette({
+  colors,
+  onColorChange,
+  onAddColor,
+  onRemoveColor,
+}: {
+  colors: string[];
+  onColorChange: (index: number, color: string) => void;
+  onAddColor: () => void;
+  onRemoveColor: (index: number) => void;
+}) {
+  return (
+    <div className="swatch-block compact-swatch">
+      <div className="label-row">
+        <span>
+          <Palette size={16} />
+          Farben
+        </span>
+      </div>
+      <div className="compact-palette-row" aria-label="Farbpalette">
+        {colors.map((color, index) => (
+          <div className="compact-swatch-wrap" key={`${color}-${index}`}>
+            <label
+              className="compact-swatch-btn"
+              style={{ background: color }}
+              aria-label={`Farbe ${index + 1}: ${color}`}
+            >
+              <input
+                type="color"
+                value={color}
+                onChange={(event) => onColorChange(index, event.target.value)}
+              />
+            </label>
+            <button
+              className="compact-swatch-remove"
+              type="button"
+              onClick={() => onRemoveColor(index)}
+              disabled={colors.length <= minColorCount}
+              aria-label={`Farbe ${index + 1} entfernen`}
+            >
+              <Minus size={9} />
+            </button>
+          </div>
+        ))}
+        {colors.length < maxColorCount && (
+          <button
+            className="compact-swatch-add"
+            type="button"
+            onClick={onAddColor}
+            aria-label="Farbe hinzufügen"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GarmentPreview({
+  image,
+  repeatSize,
+  garmentType,
+  compact = false,
+}: {
+  image: string;
+  repeatSize: number;
+  garmentType: GarmentType;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? 'garment-preview compact' : 'garment-preview'}>
+      <div className={`garment garment-${garmentType}`} style={makeRepeatStyle(image, repeatSize)}>
+        {(garmentType === 'hemd' || garmentType === 'kleid') && <div className="neckline" />}
+      </div>
+    </div>
+  );
+}
+
+function VersionMeta({ version }: { version?: Version }) {
+  if (!version) return null;
+
+  return (
+    <div className="version-meta">
+      <div>
+        <strong>{version.name}</strong>
+        <small>{version.createdAt}</small>
+      </div>
+      <div className="meta-swatches" aria-label={`Palette von ${version.name}`}>
+        {version.settings.colors.map((color) => (
+          <span key={`${version.id}-${color}`} style={{ background: color }} />
+        ))}
+      </div>
+      <dl>
+        <div>
+          <dt>Dichte</dt>
+          <dd>{version.settings.density}</dd>
+        </div>
+        <div>
+          <dt>Motivgröße</dt>
+          <dd>{version.settings.motifScale}</dd>
+        </div>
+        <div>
+          <dt>Farbintensität</dt>
+          <dd>{version.settings.colorStrength}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function ColorCountPicker({
+  value,
+  isOpen,
+  onToggle,
+  onClose,
+  onChange,
+}: {
+  value: ColorCountPreference;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onChange: (value: ColorCountPreference) => void;
+}) {
+  return (
+    <div className="start-picker" onBlur={(event) => {
+      const nextFocus = event.relatedTarget;
+      if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
+        onClose();
+      }
+    }}>
+      <span className="start-picker-label">Farbanzahl</span>
+      <button className={isOpen ? 'start-picker-button active' : 'start-picker-button'} type="button" onClick={onToggle}>
+        <span>
+          <strong>{colorCountOptions[value].label}</strong>
+        </span>
+        <ChevronDown size={17} />
+      </button>
+      {isOpen && (
+        <div className="start-menu" role="listbox" aria-label="Farbanzahl wählen">
+          {colorCountOrder.map((option) => (
+            <button
+              key={option}
+              className={value === option ? 'start-menu-option active' : 'start-menu-option'}
+              type="button"
+              role="option"
+              aria-selected={value === option}
+              onClick={() => onChange(option)}
+            >
+              <span>
+                <strong>{colorCountOptions[option].label}</strong>
+                {colorCountOptions[option].description && <small>{colorCountOptions[option].description}</small>}
+              </span>
+              {value === option && <Check size={16} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FabricStylePicker({
+  value,
+  isOpen,
+  onToggle,
+  onClose,
+  onChange,
+}: {
+  value: FabricStyle;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onChange: (value: FabricStyle) => void;
+}) {
+  return (
+    <div className="start-picker start-picker-wide" onBlur={(event) => {
+      const nextFocus = event.relatedTarget;
+      if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
+        onClose();
+      }
+    }}>
+      <span className="start-picker-label">Stoffstil</span>
+      <button className={isOpen ? 'start-picker-button active' : 'start-picker-button'} type="button" onClick={onToggle}>
+        <span>
+          <strong>{fabricStyles[value].label}</strong>
+        </span>
+        <ChevronDown size={17} />
+      </button>
+      {isOpen && (
+        <div className="start-menu start-menu-wide" role="listbox" aria-label="Stoffstil wählen">
+          {(Object.keys(fabricStyles) as FabricStyle[]).map((style) => (
+            <button
+              key={style}
+              className={value === style ? 'start-menu-option active' : 'start-menu-option'}
+              type="button"
+              role="option"
+              aria-selected={value === style}
+              onClick={() => onChange(style)}
+            >
+              <span>
+                <strong>{fabricStyles[style].label}</strong>
+                {fabricStyles[style].description && <small>{fabricStyles[style].description}</small>}
+              </span>
+              {value === style && <Check size={16} />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -130,87 +558,118 @@ function LoadingOverlay({ mode }: { mode: GenerationMode }) {
 function App() {
   const [settings, setSettings] = useState<PatternSettings>(initialSettings);
   const [viewMode, setViewMode] = useState<ViewMode>('stoffbahn');
+  const [compareViewMode, setCompareViewMode] = useState<CompareViewMode>('stoffbahn');
+  const [garmentType, setGarmentType] = useState<GarmentType>('kleid');
   const [tileImage, setTileImage] = useState('');
-  const [compareImage, setCompareImage] = useState('');
-  const [prompt, setPrompt] = useState(
-    'Tropische Blätter, einzelne Hibiskusblüten, klare Konturen, Stoffdruck für Sommerkleider',
-  );
+  const [prompt, setPrompt] = useState('');
+  const [startColorCount, setStartColorCount] = useState<ColorCountPreference>('auto');
+  const [openStartPicker, setOpenStartPicker] = useState<StartPicker | null>(null);
+  const [fabricStyle, setFabricStyle] = useState<FabricStyle>('frei');
   const [versions, setVersions] = useState<Version[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState('');
+  const [compareAId, setCompareAId] = useState('');
+  const [compareBId, setCompareBId] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>('initial');
-  const [message, setMessage] = useState('Prompt eingeben und erste KI-Kachel erzeugen.');
+  const [message, setMessage] = useState('Idee eingeben und erstes Stoffmuster erzeugen.');
 
   const hasTile = Boolean(tileImage);
-
-  const bgStyle = useMemo(
-    () => ({
-      backgroundImage: hasTile ? `url(${tileImage})` : undefined,
-      backgroundSize: `${settings.repeatSize}px ${settings.repeatSize}px`,
-    }),
-    [hasTile, settings.repeatSize, tileImage],
-  );
-
-  const compareStyle = useMemo(
-    () => ({
-      backgroundImage: hasTile
-        ? `linear-gradient(90deg, transparent 0 50%, rgba(255,255,255,.18) 50%), url(${compareImage || tileImage})`
-        : undefined,
-      backgroundSize: `${settings.repeatSize}px ${settings.repeatSize}px`,
-    }),
-    [compareImage, hasTile, settings.repeatSize, tileImage],
-  );
+  const bgStyle = makeRepeatStyle(tileImage, settings.repeatSize);
+  const compareA = versions.find((version) => version.id === compareAId) || versions[1] || versions[0];
+  const compareB = versions.find((version) => version.id === compareBId) || versions[0] || compareA;
+  const showRepeatControl =
+    viewMode === 'stoffbahn' || viewMode === 'kleidung' || (viewMode === 'vergleich' && compareViewMode !== 'kachel');
+  const showGarmentControl = viewMode === 'kleidung' || (viewMode === 'vergleich' && compareViewMode === 'kleidung');
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
   };
 
-  const saveVersion = () => {
-    if (!tileImage) {
-      setMessage('Erzeuge zuerst eine KI-Kachel, dann kannst du sie als Version sichern.');
-      return;
-    }
+  const updateColor = (index: number, color: string) => {
+    setSettings((current) => ({
+      ...current,
+      colors: current.colors.map((currentColor, colorIndex) =>
+        colorIndex === index ? color.toUpperCase() : currentColor,
+      ),
+    }));
+  };
 
-    const nextVersion = {
-      id: crypto.randomUUID(),
-      name: `Version ${versions.length + 1}`,
-      image: tileImage,
-      settings,
-      prompt,
-      createdAt: formatTime(),
-    };
-    setVersions((current) => [nextVersion, ...current].slice(0, 8));
-    setCompareImage(tileImage);
-    setMessage('Version gespeichert.');
+  const addColor = () => {
+    setSettings((current) => {
+      if (current.colors.length >= maxColorCount) return current;
+
+      return {
+        ...current,
+        colors: [...current.colors, colorSuggestions[current.colors.length] || '#F4EFE6'],
+      };
+    });
+  };
+
+  const removeColor = (index: number) => {
+    setSettings((current) => {
+      if (current.colors.length <= minColorCount) return current;
+
+      return {
+        ...current,
+        colors: current.colors.filter((_, colorIndex) => colorIndex !== index),
+      };
+    });
   };
 
   const restoreVersion = (version: Version) => {
     setSettings(version.settings);
     setPrompt(version.prompt);
+    setFabricStyle(version.fabricStyle);
     setTileImage(version.image);
-    setCompareImage(version.image);
-    setMessage(`${version.name} wurde wiederhergestellt.`);
+    setActiveVersionId(version.id);
+  };
+
+  const resetToStart = () => {
+    setTileImage('');
+    setVersions([]);
+    setActiveVersionId('');
+    setCompareAId('');
+    setCompareBId('');
+    setViewMode('stoffbahn');
+    setCompareViewMode('stoffbahn');
+    setStartColorCount('auto');
+    setOpenStartPicker(null);
+    setGenerationMode('initial');
+    setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
   };
 
   const generateWithAi = async (mode: GenerationMode) => {
+    const requestPrompt = buildAiPrompt(prompt, fabricStyle);
+    const previousActiveId = activeVersionId;
+    const requestedInitialColorCount =
+      mode === 'initial' && startColorCount !== 'auto' ? Number(startColorCount) : undefined;
+    const requestBody = {
+      prompt: requestPrompt,
+      ...(mode === 'initial'
+        ? {
+            ...(requestedInitialColorCount ? { colorCount: requestedInitialColorCount } : {}),
+          }
+        : {
+            colors: settings.colors,
+            colorCount: settings.colors.length,
+          }),
+      density: settings.density,
+      scale: settings.motifScale,
+      colorStrength: settings.colorStrength,
+      changeStrength: settings.changeStrength,
+      mode,
+      referenceImage: mode === 'refine' ? tileImage : undefined,
+    };
+
     setGenerationMode(mode);
     setIsGenerating(true);
-    setMessage(mode === 'initial' ? 'KI erzeugt die Muster-Kachel.' : 'KI verfeinert die bestehende Kachel.');
+    setMessage(mode === 'initial' ? 'Dein Stoffmuster entsteht.' : 'Deine Änderungen werden eingearbeitet.');
 
     try {
       const response = await fetch('/api/generate-pattern', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          colors: settings.colors,
-          density: settings.density,
-          scale: settings.motifScale,
-          motif: settings.motif,
-          colorStrength: settings.colorStrength,
-          changeStrength: settings.changeStrength,
-          mode,
-          referenceImage: mode === 'refine' ? tileImage : undefined,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const data = await response.json();
 
@@ -218,30 +677,149 @@ function App() {
         throw new Error(data.error || 'Keine Bilddaten erhalten.');
       }
 
+      const nextVersionId = crypto.randomUUID();
+      let extractedColors = settings.colors;
+      let paletteMessage = 'Die Arbeits-Palette wurde aus der Kachel übernommen.';
+
+      try {
+        extractedColors = await extractDominantPalette(data.imageUrl, requestedInitialColorCount);
+      } catch {
+        if (requestedInitialColorCount) {
+          extractedColors = colorSuggestions.slice(0, requestedInitialColorCount);
+        }
+        paletteMessage = 'Die automatische Farbanalyse war nicht möglich; die Palette bleibt editierbar.';
+      }
+
+      const nextSettings = {
+        ...settings,
+        colors: extractedColors,
+      };
+
+      setSettings(nextSettings);
       setTileImage(data.imageUrl);
-      setCompareImage(data.imageUrl);
+      setActiveVersionId(nextVersionId);
+      setCompareAId(mode === 'refine' && previousActiveId ? previousActiveId : nextVersionId);
+      setCompareBId(nextVersionId);
       setVersions((current) => [
         {
-          id: crypto.randomUUID(),
-          name: current.length === 0 ? 'KI-Basiskachel' : `KI-Version ${current.length + 1}`,
+          id: nextVersionId,
+          name: current.length === 0 ? 'Grundmuster' : `Verfeinerung ${current.length}`,
           image: data.imageUrl,
-          settings,
+          settings: nextSettings,
           prompt,
+          fabricStyle,
           createdAt: formatTime(),
         },
         ...current,
       ]);
-      setMessage(data.modelName ? `KI-Kachel mit ${data.modelName} erzeugt.` : 'KI-Kachel erzeugt.');
+      setMessage(`Stoffmuster wurde erzeugt. ${paletteMessage}`);
     } catch (error) {
       setMessage(
         error instanceof Error
-          ? `KI nicht erreichbar: ${error.message}.`
-          : 'KI nicht erreichbar. Es wurde keine Kachel erzeugt.',
+          ? `Erstellung nicht möglich: ${error.message}.`
+          : 'Erstellung nicht möglich. Es wurde kein Muster erzeugt.',
       );
     } finally {
       setIsGenerating(false);
     }
   };
+
+  const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isGenerating && prompt.trim().length >= 8) {
+      void generateWithAi('initial');
+    }
+  };
+
+  const renderComparePane = (version: Version | undefined, side: 'A' | 'B') => {
+    const image = version?.image || tileImage;
+
+    return (
+      <article className="compare-pane">
+        <span className="compare-label">Version {side}</span>
+        {compareViewMode === 'kachel' && (
+          <div className="compare-tile" style={makeTileStyle(image)}>
+            <span>Musterkachel</span>
+          </div>
+        )}
+        {compareViewMode === 'stoffbahn' && (
+          <div className="compare-fabric" style={makeRepeatStyle(image, settings.repeatSize)}>
+            <span>Stoffbahn</span>
+          </div>
+        )}
+        {compareViewMode === 'kleidung' && (
+          <GarmentPreview image={image} repeatSize={settings.repeatSize} garmentType={garmentType} compact />
+        )}
+        <VersionMeta version={version} />
+      </article>
+    );
+  };
+
+  if (!hasTile) {
+    return (
+      <main className="app-shell start-mode">
+        <section className="start-screen" aria-label="Stoffmuster erzeugen">
+          <a className="brand start-brand" href="/" aria-label="Tile Weave Start">
+            <img src="/logo.svg" alt="" />
+            <span>
+              <strong>Tile Weave</strong>
+            </span>
+          </a>
+
+          <form className="start-composer" onSubmit={handleStartSubmit}>
+            <div className="prompt-lead">
+              <h1>
+                <span>Aus deiner Idee wird</span>
+                <strong>ein Stoffmuster</strong>
+              </h1>
+            </div>
+            <div className="prompt-field">
+              <label htmlFor="start-prompt">Deine Musteridee</label>
+              <PromptInput value={prompt} onChange={setPrompt} />
+            </div>
+
+            <div className="start-options" aria-label="Optionale Leitplanken">
+              <ColorCountPicker
+                value={startColorCount}
+                isOpen={openStartPicker === 'colors'}
+                onToggle={() => setOpenStartPicker((current) => (current === 'colors' ? null : 'colors'))}
+                onClose={() => setOpenStartPicker(null)}
+                onChange={(value) => {
+                  setStartColorCount(value);
+                  setOpenStartPicker(null);
+                }}
+              />
+              <FabricStylePicker
+                value={fabricStyle}
+                isOpen={openStartPicker === 'style'}
+                onToggle={() => setOpenStartPicker((current) => (current === 'style' ? null : 'style'))}
+                onClose={() => setOpenStartPicker(null)}
+                onChange={(value) => {
+                  setFabricStyle(value);
+                  setOpenStartPicker(null);
+                }}
+              />
+            </div>
+
+            <button
+              className="primary-button start-submit"
+              type="submit"
+              disabled={isGenerating || prompt.trim().length < 8}
+            >
+              <Wand2 size={18} />
+              Stoffmuster erzeugen
+            </button>
+            {message.startsWith('Erstellung nicht möglich') && (
+              <p className="start-status" aria-live="polite">
+                {message}
+              </p>
+            )}
+            {isGenerating && <LoadingOverlay mode="initial" />}
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -250,7 +828,6 @@ function App() {
           <img src="/logo.svg" alt="" />
           <span>
             <strong>Tile Weave</strong>
-            <small>Nahtlose Stoffmuster prüfen</small>
           </span>
         </a>
 
@@ -274,14 +851,14 @@ function App() {
         </nav>
 
         <div className="top-actions">
-          <button className="ghost-button" type="button" onClick={saveVersion} disabled={!hasTile}>
-            <Save size={17} />
-            Version
+          <button className="ghost-button" type="button" onClick={resetToStart} disabled={isGenerating}>
+            <Lightbulb size={17} />
+            Neue Idee
           </button>
           <button
             className="primary-button"
             type="button"
-            onClick={() => downloadImage(tileImage, 'tile-weave-ki-kachel.png')}
+            onClick={() => downloadImage(tileImage, 'tile-weave-musterkachel.png')}
             disabled={!hasTile}
           >
             <Download size={17} />
@@ -291,73 +868,37 @@ function App() {
       </header>
 
       <section className="workspace">
-        <aside className="panel controls-panel" aria-label="KI-Muster erzeugen und verfeinern">
+        <aside className="panel controls-panel" aria-label="Stoffmuster verfeinern">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Prompt</p>
-              <h1>Generative Kachel</h1>
+              <h1>Muster anpassen</h1>
             </div>
-            <Bot size={22} />
+            <Sparkles size={22} />
           </div>
 
-          <div className="prompt-box">
-            <label htmlFor="prompt-input">Start-Prompt</label>
-            <textarea
-              id="prompt-input"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              aria-label="KI-Prompt"
-            />
-            <button
-              className="primary-button ai-generate"
-              type="button"
-              onClick={() => generateWithAi('initial')}
-              disabled={isGenerating || prompt.trim().length < 8}
-            >
-              <Wand2 size={16} />
-              {hasTile ? 'Neue Kachel aus Prompt' : 'KI-Kachel erzeugen'}
-            </button>
+          <div className="prompt-summary" aria-label="Ausgangsbriefing">
+            <span>Ausgangsidee</span>
+            <p>{prompt}</p>
+            {fabricStyle !== 'frei' && (
+              <div className="prompt-summary-footer">
+                <small>{fabricStyles[fabricStyle].label}</small>
+              </div>
+            )}
           </div>
 
-          <div className="segmented" aria-label="Motivart">
-            {(Object.keys(motifLabels) as Motif[]).map((motif) => (
-              <button
-                key={motif}
-                className={settings.motif === motif ? 'active' : ''}
-                type="button"
-                onClick={() => updateSetting('motif', motif)}
-              >
-                {motifLabels[motif]}
-              </button>
-            ))}
-          </div>
-
-          <div className="swatch-block">
-            <div className="label-row">
-              <Palette size={16} />
-              <span>Farbwelt</span>
-            </div>
-            <div className="palette-grid">
-              {palettes.map((palette) => (
-                <button
-                  key={palette.join('-')}
-                  className={settings.colors.join() === palette.join() ? 'palette active' : 'palette'}
-                  type="button"
-                  onClick={() => updateSetting('colors', palette)}
-                  aria-label={`Palette ${palette.join(', ')}`}
-                >
-                  {palette.map((color) => (
-                    <span key={color} style={{ background: color }} />
-                  ))}
-                </button>
-              ))}
-            </div>
-          </div>
+          <CompactPalette
+            colors={settings.colors}
+            onColorChange={updateColor}
+            onAddColor={addColor}
+            onRemoveColor={removeColor}
+          />
 
           <div className="refinement-block">
             <div className="label-row">
-              <Sparkles size={16} />
-              <span>KI-Refinement</span>
+              <span>
+                <Sparkles size={16} />
+                Mustersteuerung
+              </span>
             </div>
             <Slider
               label="Dichte"
@@ -389,137 +930,152 @@ function App() {
               Refinement anwenden
             </button>
           </div>
-
-          <div className="preview-controls">
-            <Slider
-              label="Rapport-Zoom"
-              value={settings.repeatSize}
-              min={72}
-              max={180}
-              unit=" px"
-              onChange={(value) => updateSetting('repeatSize', value)}
-            />
-          </div>
         </aside>
 
         <section className="preview-stage" aria-live="polite">
-          <div className="stage-meta">
-            <span>
-              <Check size={16} />
-              {message}
-            </span>
-            <span>Stoffbahn-Simulation, nicht maßstabsgetreu</span>
+          <div className="preview-header">
+            <div>
+              <p className="eyebrow">Anwendung</p>
+              <h2>
+                {viewMode === 'kachel'
+                  ? 'Kachel prüfen'
+                  : viewMode === 'stoffbahn'
+                    ? 'Rapport auf Fläche'
+                    : viewMode === 'kleidung'
+                      ? 'Kleidung und Objekt'
+                      : 'Versionen vergleichen'}
+              </h2>
+            </div>
+
+            <div className="preview-tools">
+              {viewMode === 'vergleich' && (
+                <div className="compare-tools">
+                  <label>
+                    Version A
+                    <select value={compareA?.id || ''} onChange={(event) => setCompareAId(event.target.value)}>
+                      {versions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Version B
+                    <select value={compareB?.id || ''} onChange={(event) => setCompareBId(event.target.value)}>
+                      {versions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {version.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="segmented compact-segmented" aria-label="Vergleichsansicht">
+                    {[
+                      ['stoffbahn', 'Stoffbahn'],
+                      ['kleidung', 'Kleidung'],
+                      ['kachel', 'Kachel'],
+                    ].map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        className={compareViewMode === mode ? 'active' : ''}
+                        type="button"
+                        onClick={() => setCompareViewMode(mode as CompareViewMode)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showGarmentControl && (
+                <div className="garment-picker" aria-label="Anwendung wählen">
+                  {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
+                    <button
+                      key={type}
+                      className={garmentType === type ? 'active' : ''}
+                      type="button"
+                      onClick={() => setGarmentType(type)}
+                    >
+                      {garmentTypes[type].label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showRepeatControl && (
+                <Slider
+                  label="Rapportgröße"
+                  value={settings.repeatSize}
+                  min={72}
+                  max={180}
+                  unit=" px"
+                  onChange={(value) => updateSetting('repeatSize', value)}
+                />
+              )}
+            </div>
           </div>
 
-          {!hasTile && (
-            <div className="empty-stage">
-              <Wand2 size={42} />
-              <h2>Erzeuge eine generative Muster-Kachel</h2>
-              <p>Der Prompt steht am Anfang. Danach kannst du die KI-Kachel über Dichte, Motivgröße, Farbwelt und Änderungsstärke gezielt verfeinern.</p>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => generateWithAi('initial')}
-                disabled={isGenerating || prompt.trim().length < 8}
-              >
-                <Sparkles size={17} />
-                Erste KI-Kachel erzeugen
-              </button>
-            </div>
-          )}
-
-          {hasTile && viewMode === 'stoffbahn' && (
-            <div className="fabric-view">
-              <div className="fabric-roll" style={bgStyle}>
-                <div className="fabric-shadow" />
-              </div>
-            </div>
-          )}
-
-          {hasTile && viewMode === 'kleidung' && (
-            <div className="garment-view">
-              <div className="garment garment-dress" style={bgStyle}>
-                <div className="neckline" />
-              </div>
-              <div className="garment-notes">
-                <h2>Wirkung am Kleidungsstück</h2>
-                <p>Prüfe, ob Dichte und Motivgröße an Nähten, Saum und Oberkörper klar lesbar bleiben.</p>
-                <div>
-                  <span>Lesbarkeit</span>
-                  <strong>{settings.motifScale > 72 ? 'großflächig' : settings.density > 70 ? 'lebhaft' : 'ruhig'}</strong>
+          <div className="stage-body">
+            {viewMode === 'stoffbahn' && (
+              <div className="fabric-view">
+                <div className="fabric-roll" style={bgStyle}>
+                  <div className="fabric-shadow" />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {hasTile && viewMode === 'kachel' && (
-            <div className="tile-view">
-              <div className="tile-focus" style={{ backgroundImage: `url(${tileImage})` }}>
-                <span>KI-Kachel</span>
+            {viewMode === 'kleidung' && (
+              <div className="garment-view">
+                <GarmentPreview image={tileImage} repeatSize={settings.repeatSize} garmentType={garmentType} />
+                <div className="garment-notes">
+                  <h2>{garmentTypes[garmentType].label}</h2>
+                  <p>{garmentTypes[garmentType].note}</p>
+                </div>
               </div>
-              <div className="tile-repeat-grid" style={bgStyle}>
-                <span>3 x 3 Rapportprüfung</span>
-              </div>
-            </div>
-          )}
+            )}
 
-          {hasTile && viewMode === 'vergleich' && (
-            <div className="compare-view">
-              <div className="compare-before" style={compareStyle} />
-              <div className="compare-after" style={bgStyle} />
-              <div className="split-handle">
-                <ArrowLeftRight size={18} />
-                Vergleich
+            {viewMode === 'kachel' && (
+              <div className="tile-view">
+                <div className="tile-focus" style={makeTileStyle(tileImage)}>
+                  <span>Musterkachel</span>
+                </div>
+                <div className="tile-repeat-grid" style={bgStyle}>
+                  <span>3 x 3 Rapportprüfung</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {viewMode === 'vergleich' && (
+              <div className="compare-view">
+                {renderComparePane(compareA, 'A')}
+                {renderComparePane(compareB, 'B')}
+              </div>
+            )}
+          </div>
 
           {isGenerating && <LoadingOverlay mode={generationMode} />}
         </section>
 
-        <aside className="panel decision-panel" aria-label="Entscheidungshilfe">
+        <aside className="panel versions-panel" aria-label="Bisherige Versionen">
           <div className="panel-heading compact">
             <div>
-              <p className="eyebrow">Entscheidung</p>
-              <h2>Ist das Muster tragbar?</h2>
+              <p className="eyebrow">Verlauf</p>
+              <h2>Bisherige Versionen</h2>
             </div>
-            <Eye size={20} />
-          </div>
-
-          <div className="score-list">
-            <div>
-              <span>Rapport-Zoom</span>
-              <strong>{settings.repeatSize < 95 ? 'fein' : settings.repeatSize > 148 ? 'groß' : 'balanciert'}</strong>
-            </div>
-            <div>
-              <span>Flächenruhe</span>
-              <strong>{settings.density > 72 ? 'intensiv' : settings.density < 40 ? 'luftig' : 'gut'}</strong>
-            </div>
-            <div>
-              <span>Konfektion</span>
-              <strong>{settings.motifScale > 76 ? 'Statement' : 'alltagstauglich'}</strong>
-            </div>
-          </div>
-
-          <div className="mini-preview" style={bgStyle}>
-            {hasTile ? <Scissors size={22} /> : <Wand2 size={22} />}
-          </div>
-
-          <div className="version-header">
-            <span>
-              <History size={16} />
-              Versionen
-            </span>
-            <button type="button" onClick={saveVersion} disabled={!hasTile}>
-              <Sparkles size={15} />
-              sichern
-            </button>
+            <History size={20} />
           </div>
 
           <div className="versions">
-            {versions.length === 0 && <p className="empty-versions">KI-Versionen erscheinen nach der ersten Generierung.</p>}
+            {versions.length === 0 && <p className="empty-versions">Versionen erscheinen nach dem ersten Muster.</p>}
             {versions.map((version) => (
-              <button key={version.id} type="button" onClick={() => restoreVersion(version)}>
+              <button
+                key={version.id}
+                className={activeVersionId === version.id ? 'active' : ''}
+                type="button"
+                onClick={() => restoreVersion(version)}
+              >
                 <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
                 <span>
                   <strong>{version.name}</strong>
