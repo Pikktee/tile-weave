@@ -816,6 +816,7 @@ function App() {
     setActiveVersionId('');
     setViewMode('kachel');
     setPreviewTool('pan');
+    setPreviewTransform(initialPanZoom);
     setGenerationMode('initial');
     setMessage('Idee eingeben und neues Stoffmuster erzeugen.');
     setRefinementInput('');
@@ -932,6 +933,7 @@ function App() {
   const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isGenerating && prompt.trim().length >= 8) {
+      setPreviewTransform(initialPanZoom);
       void generateWithAi('initial');
     }
   };
