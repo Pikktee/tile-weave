@@ -36,6 +36,9 @@ type Version = {
   prompt: string;
   seed?: number;
   note: string;
+  imageAdjustments: ImageAdjustmentSettings;
+  offsetX: number;
+  offsetY: number;
 };
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
@@ -657,7 +660,17 @@ function App() {
   const imageFilter = makeImageAdjustmentFilter(imageAdjustments);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+    setSettings((current) => {
+      const next = { ...current, [key]: value };
+      if (activeVersionId) {
+        setVersions((currentVersions) =>
+          currentVersions.map((v) =>
+            v.id === activeVersionId ? { ...v, settings: next } : v
+          )
+        );
+      }
+      return next;
+    });
   };
 
   const updatePreviewZoom = (nextZoom: number) => {
@@ -800,7 +813,39 @@ function App() {
   };
 
   const updateImageAdjustment = (key: keyof ImageAdjustmentSettings, value: number) => {
-    setImageAdjustments((current) => ({ ...current, [key]: value }));
+    setImageAdjustments((current) => {
+      const next = { ...current, [key]: value };
+      if (activeVersionId) {
+        setVersions((currentVersions) =>
+          currentVersions.map((v) =>
+            v.id === activeVersionId ? { ...v, imageAdjustments: next } : v
+          )
+        );
+      }
+      return next;
+    });
+  };
+
+  const updateOffsetX = (value: number) => {
+    setOffsetX(value);
+    if (activeVersionId) {
+      setVersions((currentVersions) =>
+        currentVersions.map((v) =>
+          v.id === activeVersionId ? { ...v, offsetX: value } : v
+        )
+      );
+    }
+  };
+
+  const updateOffsetY = (value: number) => {
+    setOffsetY(value);
+    if (activeVersionId) {
+      setVersions((currentVersions) =>
+        currentVersions.map((v) =>
+          v.id === activeVersionId ? { ...v, offsetY: value } : v
+        )
+      );
+    }
   };
 
   const restoreVersion = (version: Version) => {
@@ -808,6 +853,9 @@ function App() {
     setPrompt(version.prompt);
     setTileImage(version.image);
     setActiveVersionId(version.id);
+    setImageAdjustments(version.imageAdjustments ?? initialImageAdjustments);
+    setOffsetX(version.offsetX ?? 50);
+    setOffsetY(version.offsetY ?? 50);
   };
 
   const resetToStart = () => {
@@ -903,6 +951,9 @@ function App() {
           prompt: requestPrompt,
           seed: typeof data.seed === 'number' ? data.seed : stableSeed,
           note: options?.versionNote?.trim() ?? '',
+          imageAdjustments: { ...imageAdjustments },
+          offsetX,
+          offsetY,
         },
         ...current,
       ]);
@@ -1101,14 +1152,14 @@ function App() {
               value={offsetX}
               hint="Verschiebt das Muster horizontal – nur in der Stoffbahn-Ansicht aktiv."
               disabled={viewMode !== 'stoffbahn'}
-              onChange={setOffsetX}
+              onChange={updateOffsetX}
             />
             <Slider
               label="Vertikaler Versatz"
               value={offsetY}
               hint="Verschiebt das Muster vertikal – nur in der Stoffbahn-Ansicht aktiv."
               disabled={viewMode !== 'stoffbahn'}
-              onChange={setOffsetY}
+              onChange={updateOffsetY}
             />
           </div>
         </aside>
