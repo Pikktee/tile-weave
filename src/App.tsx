@@ -1440,7 +1440,6 @@ function App() {
                     <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
                     <span>
                       <strong>{version.name}</strong>
-                      {version.note && <small>{version.note}</small>}
                     </span>
                     <span
                       className="version-info-toggle"
@@ -1464,11 +1463,7 @@ function App() {
                   </button>
                   {isExpanded && (
                     <div className="version-prompt-detail">
-                      <strong>Prompt (EN):</strong>
                       <p>{version.prompt}</p>
-                      {version.seed && (
-                        <div className="version-prompt-seed">Seed: {version.seed}</div>
-                      )}
                     </div>
                   )}
                 </div>

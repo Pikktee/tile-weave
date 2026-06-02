@@ -1620,18 +1620,11 @@ input[type="range"] {
 }
 
 .version-prompt-detail {
-  padding: 0 12px 12px 73px;
+  padding: 2px 12px 12px 73px;
   font-size: 0.78rem;
   color: var(--muted);
   line-height: 1.45;
   animation: slideDown 180ms ease-out;
-}
-
-.version-prompt-detail strong {
-  display: block;
-  font-size: 0.74rem;
-  color: var(--ink);
-  margin-bottom: 4px;
 }
 
 .version-prompt-detail p {
@@ -1640,12 +1633,6 @@ input[type="range"] {
   word-break: break-word;
   white-space: normal;
   text-transform: none;
-}
-
-.version-prompt-seed {
-  margin-top: 6px;
-  font-size: 0.7rem;
-  opacity: 0.8;
 }
 
 @keyframes slideDown {
