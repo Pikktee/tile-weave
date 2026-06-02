@@ -429,6 +429,8 @@ textarea:focus-visible {
 }
 
 .panel {
+  position: relative;
+  z-index: 3;
   padding: 20px;
   overflow: visible;
 }
@@ -503,7 +505,7 @@ h2 {
 
 .control {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .control-label-row,
@@ -515,11 +517,16 @@ h2 {
   gap: 10px;
 }
 
-.control-label-row,
 .label-row {
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.control-label-row {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .label-row > span {
@@ -773,6 +780,7 @@ input[type="range"] {
 
 .preview-stage {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
@@ -1249,25 +1257,19 @@ input[type="range"] {
 
 .tile-view {
   display: grid;
-  grid-template-columns: minmax(220px, 340px) 1fr;
+  grid-template-columns: minmax(220px, 340px) minmax(220px, calc(100vh - 300px));
   gap: 40px;
-  height: 100%;
+  align-items: start;
+  justify-content: center;
 }
 
 .tile-card {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
-}
-
-.tile-card:has(.tile-repeat-grid) {
-  justify-content: flex-start;
-}
-
-.tile-card:has(.tile-repeat-grid) .tile-repeat-grid {
-  flex: 1;
+  max-width: calc(100vh - 300px);
 }
 
 .tile-card-header {
@@ -1317,15 +1319,18 @@ input[type="range"] {
   border: 1px solid rgba(25, 23, 22, 0.18);
   border-radius: 0;
   box-shadow: 0 26px 50px rgba(43, 33, 30, 0.16);
-}
-
-.tile-repeat-grid {
-  min-height: 340px;
+  flex-shrink: 0;
+  align-self: start;
+  width: 100%;
+  aspect-ratio: 1;
 }
 
 .tile-focus {
   display: block;
-  width: 100%;
+}
+
+.tile-repeat-grid {
+  min-height: 220px;
 }
 
 .tile-focus img {
@@ -1709,6 +1714,10 @@ input[type="range"] {
   .panel,
   .preview-stage {
     min-height: auto;
+  }
+
+  .tile-card {
+    max-width: none;
   }
 
   .refinement-shell .panel,

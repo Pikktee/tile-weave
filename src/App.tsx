@@ -863,6 +863,7 @@ function App() {
 
   const resetToStart = () => {
     setTileImage('');
+    setPrompt('');
     setVersions([]);
     setActiveVersionId('');
     setViewMode('kachel');
@@ -1134,7 +1135,7 @@ function App() {
             <div className="label-row">
               <span>
                 <Ruler size={16} />
-                Ansicht
+                Rapport & Ausrichtung
                 <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={viewSettingsTooltip}>
                   <CircleHelp size={14} />
                   <span className="control-tooltip-popup" role="tooltip">
