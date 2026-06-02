@@ -42,6 +42,7 @@ Bildqualitaet und Tempo werden pro Modus getrennt gesteuert. Initial zaehlt die 
 - `FAL_REFINE_STEPS`: optional, Standard ist `8`. Bereich 1-8. Niedrigere Werte sind schneller, fuehren beim Refinement aber schneller zu Rauschen.
 - `FAL_ACCELERATION`: optional, Standard ist `high`. Alternativ `regular` oder `none`.
 - `FAL_OUTPUT_FORMAT`: optional, Standard ist `png` (sauberer Export). Alternativ `jpeg` oder `webp` fuer kleinere Payloads.
+- `FAL_TRANSLATION_MODEL`: optional, Standard ist `meta-llama/llama-3-8b-instruct`. Steuert das LLM, das deutsche Nutzereingaben ins Englische übersetzt und strukturell optimiert (über OpenRouter).
 - `PORT`: optional, Standard ist `8787`.
 
 Der Vite-Devserver proxyt `/api` an `http://127.0.0.1:8787`. Frontend-Code sollte deshalb weiterhin relative API-URLs wie `/api/generate-pattern` verwenden.
@@ -53,7 +54,7 @@ fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/tur
 - Initiale Generierung ist text-to-image; Refinement ist img2img und sendet die bestehende Kachel als `image_url` mit `strength` aus `changeStrength`.
 - `sync_mode: true` liefert das Bild direkt als Data-URI zurueck, damit Farbanalyse und PNG-Export im Frontend ohne Cross-Origin-Probleme funktionieren.
 - `referenceImage` kann als Data-URI gross werden; Express akzeptiert deshalb JSON bis `12mb`.
-- `/api/health` meldet Provider, Modell, Initial-/Refinement-`imageSize`, Inference-Steps, Beschleunigung und Ausgabeformat und prueft, ob `FAL_KEY` gesetzt ist.
+- `/api/health` meldet Provider, Modell, Initial-/Refinement-`imageSize`, Inference-Steps, Beschleunigung, Ausgabeformat sowie Übersetzungs-Status und -Modell und prueft, ob `FAL_KEY` gesetzt ist.
 
 ## Architekturhinweise
 
@@ -62,9 +63,11 @@ fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/tur
 - Generierung ist asynchron und nutzerseitig fehlertolerant. Fehler sollen als verstaendliche deutsche Statusmeldung in `message` landen.
 - Versionen werden nur im React-State gehalten und nicht persistiert. Keine Persistenz einbauen, ohne auch UX, Datenschutz und Speichergrenzen mitzudenken.
 - Der initiale Flow ist Prompt-first: Nutzer geben zuerst den Prompt ein und erzeugen daraus eine KI-Kachel.
-- Nach der ersten Kachel verfeinert ein Prompt-Chat im Panel "Anpassungen" die Kachel. Jede Eingabe wird an den bisherigen Prompt angehaengt (`combined = base + ', ' + addition`), in `prompt` uebernommen und loest eine **neue text-to-image-Generierung** (`mode: 'initial'`) aus. Es ist kein img2img und keine lokale Bildbearbeitung; jede Anwendung erzeugt also ein neues Layout.
-- Die jeweils neue Anweisung wird zusaetzlich als `emphasis` an den Server gesendet und dort als letzter, hervorgehobener Prompt-Block mit Vorrang platziert, damit sie nicht von der Boilerplate davor verwaessert wird. Grund: Das Turbo-Modell folgt einzelnen Anweisungen in langen kumulierten Prompts sonst nur schwach.
-- Der `promptHistory`-State zeigt im Panel pro Eintrag nur die jeweilige Nachricht (initialer Prompt bzw. einzelne Ergaenzung), nicht den kumulierten Gesamtprompt.
+- Nach der ersten Kachel verfeinert ein Prompt-Chat im Panel "Anpassungen" die Kachel. Jede Eingabe wird separat an den Server gesendet (als `emphasis`, während der bisherige Prompt als `prompt` gesendet wird).
+- Der Server führt den bisherigen Prompt und den neuen Zusatzwunsch über ein LLM (`FAL_TRANSLATION_MODEL` über OpenRouter) intelligent zusammen (Motive an den Anfang, Stile/Farben an das Ende, Entfernung von Meta-Befehlen wie "füge hinzu") und übersetzt das Ergebnis vollständig auf Englisch. Das Bildmodell erhält somit immer einen strukturell idealen, rein beschreibenden englischen Prompt.
+- Der Server gibt den zusammengeführten Prompt im Response-Feld `prompt` zurück. Das Frontend übernimmt diesen Prompt in seinen React-State, wodurch Folgebefehle auf dieser optimierten Basis aufbauen.
+- In der Versionsliste können die exakten englischen Prompts über ein ausklappbares Akkordeon-Panel (Info-Icon) direkt im UI eingesehen werden.
+- Der ungenutzte `promptHistory`-State wurde entfernt (wird durch das Akkordeon-UI in der Versionsliste abgelöst).
 - Serverseitig existiert weiterhin ein img2img-Refinement-Pfad (`mode: 'refine'` mit `referenceImage`/`downscaleForRefine()` auf 768 px und `strength` aus `changeStrength`), wird aber aktuell nicht aus der UI aufgerufen. Er bleibt als Option erhalten; vor Reaktivierung beachten, dass die konservative `strength` Prompt-Anweisungen stark daempft. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, die `downscaleForRefine()`-Konstante bewusst mitpruefen.
 - Keine lokalen Ersatzkacheln erzeugen, wenn fal.ai fehlschlaegt. Fehler klar anzeigen.
 
