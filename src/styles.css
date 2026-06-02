@@ -1015,7 +1015,7 @@ input[type="range"] {
 
 .garment-picker button:hover {
   color: var(--ink);
-  background: rgba(25, 23, 22, 0.04);
+  background: rgba(25, 23, 22, 0.03);
 }
 
 .garment-picker button.active {
