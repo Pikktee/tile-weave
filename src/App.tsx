@@ -952,7 +952,7 @@ function App() {
       setVersions((current) => [
         {
           id: nextVersionId,
-          name: `Version ${current.length + 1}`,
+          name: `Variante ${current.length + 1}`,
           image: data.imageUrl,
           settings: nextSettings,
           prompt: finalPrompt,
@@ -1378,19 +1378,19 @@ function App() {
           {isGenerating && <LoadingOverlay mode={generationMode} />}
         </section>
 
-        <aside className="panel versions-panel" aria-label="Versionen">
+        <aside className="panel versions-panel" aria-label="Varianten">
           <div className="panel-heading">
             <span className="panel-heading__badge" aria-hidden="true">
               <GitBranch size={18} />
             </span>
-            <h2 className="panel-heading__title">Versionen</h2>
+            <h2 className="panel-heading__title">Varianten</h2>
           </div>
 
           <div className="refinement-block new-version-block">
             <div className="label-row">
               <span>
                 <Wand2 size={16} />
-                Neue Version erzeugen
+                Neue Variante erzeugen
                 <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={newVersionTooltip}>
                   <CircleHelp size={14} />
                   <span className="control-tooltip-popup" role="tooltip">
@@ -1410,25 +1410,25 @@ function App() {
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
-                placeholder="Optionale Zusatzbeschreibung für die nächste Version..."
+                placeholder="Optionale Zusatzbeschreibung der neuen Variante..."
                 rows={2}
                 disabled={isGenerating}
-                aria-label="Optionale Prompt-Ergänzung für neue Version"
+                aria-label="Optionale Prompt-Ergänzung für neue Variante"
               />
               <button
                 className="ghost-button prompt-chat-send"
                 type="submit"
                 disabled={isGenerating}
-                aria-label="Neue Version erzeugen"
+                aria-label="Neue Variante erzeugen"
               >
                 <SendHorizontal size={16} />
-                Version erzeugen
+                Variante erzeugen
               </button>
             </form>
           </div>
 
           <div className="versions">
-            {versions.length === 0 && <p className="empty-versions">Versionen erscheinen nach dem ersten Muster.</p>}
+            {versions.length === 0 && <p className="empty-versions">Varianten erscheinen nach dem ersten Muster.</p>}
             {versions.map((version) => {
               const isExpanded = expandedVersionId === version.id;
               const isActive = activeVersionId === version.id;

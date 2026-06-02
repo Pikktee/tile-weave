@@ -1583,9 +1583,9 @@ input[type="range"] {
 }
 
 .version-item-wrapper.active-version {
-  border-color: var(--dark);
+  border-color: rgba(25, 23, 22, 0.35);
   background: #fff;
-  box-shadow: inset 0 0 0 2px var(--dark);
+  box-shadow: inset 0 0 0 1px rgba(25, 23, 22, 0.35);
 }
 
 .version-item-wrapper button {
