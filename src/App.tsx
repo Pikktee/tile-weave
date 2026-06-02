@@ -1,5 +1,7 @@
 import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
 import {
+  ChevronDown,
+  ChevronUp,
   CircleHelp,
   Download,
   GitBranch,
@@ -1446,7 +1448,7 @@ function App() {
                       className="version-info-toggle"
                       role="button"
                       tabIndex={0}
-                      aria-label="Prompt-Details anzeigen"
+                      aria-label={isExpanded ? "Prompt-Details ausblenden" : "Prompt-Details anzeigen"}
                       onClick={(event) => {
                         event.stopPropagation();
                         setExpandedVersionId(isExpanded ? null : version.id);
@@ -1459,7 +1461,7 @@ function App() {
                         }
                       }}
                     >
-                      <CircleHelp size={14} />
+                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </span>
                   </button>
                   {isExpanded && (
