@@ -82,8 +82,122 @@ const resolveRefineStrength = (changeStrength = 28) => {
 // referenceImage wird beim Refinement als Data-URI mitgesendet und kann groß sein.
 app.use(express.json({ limit: '12mb' }));
 
+const translateToEnglish = async (text, apiKey) => {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
+
+  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 Sekunden Timeout
+
+  try {
+    const response = await fetch('https://fal.run/openrouter/router/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Key ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional translator. Translate the user input into natural English. Keep all design terminology, styles, and colors precise. If the text is already in English or has no obvious translation, output it exactly as is. Output ONLY the translated text, do not wrap it in quotes, do not add notes, do not explain.',
+          },
+          {
+            role: 'user',
+            content: text,
+          },
+        ],
+        temperature: 0.0,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      const translated = data?.choices?.[0]?.message?.content?.trim();
+      if (translated && translated.length > 0) {
+        const cleanTranslated = translated.replace(/^["'«»“”]|["'«»“”]$/g, '').trim();
+        console.log(`[Translation] "${text}" -> "${cleanTranslated}"`);
+        return cleanTranslated;
+      }
+    } else {
+      console.warn(`Übersetzungsdienst antwortete mit Status ${response.status}`);
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('Übersetzung fehlgeschlagen oder Timeout, nutze Originaltext:', error);
+  }
+  return text;
+};
+
+const mergeAndTranslatePrompt = async (basePrompt, addition, apiKey) => {
+  if (!basePrompt && !addition) return '';
+  if (!addition) return translateToEnglish(basePrompt, apiKey);
+
+  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 Sekunden Timeout
+
+  const messages = [
+    {
+      role: 'system',
+      content: `You are an expert AI prompt engineer for image generation models.
+Your task:
+1. Merge the base pattern description and the new modification/addition into a single, cohesive, descriptive English prompt.
+2. Remove any conversational instructions or meta-language like "add", "please include", "change the", "füge hinzu", "mach das".
+3. Group the main subjects (animals, plants, objects) together at the beginning of the prompt.
+4. Group colors, styling, and design keywords (e.g., pastel colors, flat illustration, watercolor) together at the end of the prompt.
+5. Translate everything to English.
+6. Output ONLY the final merged English prompt. Do not add quotes, introductions, explanations, or notes.`,
+    },
+    {
+      role: 'user',
+      content: `Base prompt: ${basePrompt || ''}\nAddition/Modification: ${addition || ''}`,
+    },
+  ];
+
+  try {
+    const response = await fetch('https://fal.run/openrouter/router/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Key ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.2,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      const result = data?.choices?.[0]?.message?.content?.trim();
+      if (result && result.length > 0) {
+        const cleanResult = result.replace(/^["'«»“”]|["'«»“”]$/g, '').trim();
+        console.log(`[Prompt Merger] Base: "${basePrompt}" | Add: "${addition}" -> Merged: "${cleanResult}"`);
+        return cleanResult;
+      }
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('Prompt merging failed or timed out:', error);
+  }
+
+  // Fallback zu simpler Aneinanderreihung, falls LLM fehlschlägt
+  const simpleConcat = addition ? `${basePrompt}, ${addition}` : basePrompt;
+  return translateToEnglish(simpleConcat, apiKey);
+};
+
 app.get('/api/health', (_req, res) => {
   const ok = Boolean(process.env.FAL_KEY);
+  const translationModel = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
 
   res.status(ok ? 200 : 500).json({
     ok,
@@ -93,6 +207,10 @@ app.get('/api/health', (_req, res) => {
     refine: { imageSize: resolveImageSize('refine'), inferenceSteps: resolveInferenceSteps('refine') },
     acceleration: resolveAcceleration(),
     outputFormat: resolveOutputFormat(),
+    translation: {
+      enabled: true,
+      model: translationModel,
+    },
     ...(ok ? {} : { error: 'FAL_KEY fehlt auf dem Server.' }),
   });
 });
@@ -142,6 +260,10 @@ app.post('/api/generate-pattern', async (req, res) => {
   } = req.body ?? {};
 
   try {
+    // Merge base prompt und emphasis (Zusatzanweisung) und übersetze ins Englische
+    const translatedPrompt = await mergeAndTranslatePrompt(prompt, emphasis, apiKey);
+    const translatedEmphasis = await translateToEnglish(emphasis, apiKey);
+
     const requestedSeed = Number(seed);
     const stableSeed = Number.isInteger(requestedSeed) ? requestedSeed : null;
     const palette = Array.isArray(colors) ? colors.slice(0, 6) : [];
@@ -158,49 +280,49 @@ app.post('/api/generate-pattern', async (req, res) => {
     // Boilerplate, die mit den eigentlichen Motiv- und Anpassungsanweisungen konkurriert.
     const densityLine =
       density < 34
-        ? 'Dichte: luftiger Rapport mit viel ruhiger Fläche und wenigen Motiven.'
+        ? 'Density: airy repeat with plenty of calm background space and few motifs.'
         : density > 72
-          ? 'Dichte: dichter Rapport mit vielen Motiven und hoher Flächenfüllung.'
+          ? 'Density: dense repeat with many motifs and high coverage.'
           : '';
     const colorLine =
       colorStrength < 34
-        ? 'Farben: gedämpfte, sanfte Umsetzung; Palette nur zurückhaltend einsetzen.'
+        ? 'Colors: muted, soft rendering; use the palette only conservatively.'
         : colorStrength > 72
-          ? 'Farben: kräftige, palette-treue Umsetzung; angegebene Farben klar wiedererkennbar.'
+          ? 'Colors: vibrant, palette-true rendering; make the specified colors clearly recognizable.'
           : '';
     const refineInstruction =
       changeStrength < 22
-        ? 'Sehr nah an der Referenz bleiben: Rapport, Motivformen, Motivanzahl und Komposition erhalten; nur Farbe, Sauberkeit und kleine Details anpassen.'
+        ? 'Stay very close to the reference: preserve repeat, motif shapes, motif count, and composition; only adjust color, clarity, and minor details.'
         : changeStrength < 45
-          ? 'Behutsam weiterentwickeln: Grundkomposition, Motivarten und Randanschluesse erhalten; Farben und Details sichtbar verbessern.'
+          ? 'Gently develop further: preserve basic composition, motif types, and edge connections; visibly improve colors and details.'
           : changeStrength < 70
-            ? 'Sichtbar weiterentwickeln, aber die textile Musterlogik der Referenz bewahren; keine zufaelligen neuen Rauschmotive einfuegen.'
-            : 'Mutig weiterentwickeln, dennoch als klare Variante derselben Musteridee mit erkennbarer Struktur, sauberen Motiven und nahtlosem Rapport.';
-    const emphasisText =
-      typeof emphasis === 'string' && emphasis.trim().length > 0 ? emphasis.trim().slice(0, 300) : '';
+            ? 'Visibly develop further, but preserve the textile pattern logic of the reference; do not introduce random new noise motifs.'
+            : 'Boldly develop further, yet keep it as a clear variation of the same pattern idea with recognizable structure, clean motifs, and seamless repeat.';
+    const cleanEmphasis = typeof translatedEmphasis === 'string' ? translatedEmphasis.trim() : '';
+    const emphasisText = cleanEmphasis.length > 0 ? cleanEmphasis.slice(0, 300) : '';
     const requestPrompt = [
-      'smlstxtr, nahtlos kachelbare Musterkachel für Kleidungsstoff, seamless texture.',
-      'Nur das flache Muster, keine Kleidung, kein Mockup, kein Rand, keine Perspektive, keine Schatten.',
-      'Die Kachel muss an allen vier Seiten visuell fortsetzbar sein und wie ein echter Rapport funktionieren.',
+      'smlstxtr, seamless tileable pattern tile for apparel fabric, seamless texture.',
+      'Flat 2D pattern only, no clothing, no mockup, no border, no perspective, no shadows.',
+      'The tile must be visually continuous on all four sides and function as a seamless repeat pattern.',
       isRefinement
         ? [
-            'Refinement auf Basis der Referenzkachel: erhalte Rapport, Motivstruktur, Kantenanschluesse und textile Flachheit.',
+            'Refinement based on the reference tile: preserve pattern repeat, motif structure, edge alignment, and textile flatness.',
             refineInstruction,
-            'Keine Rauschtextur, keine zufaelligen Pixel, keine koernigen Artefakte, kein verschwommener Hintergrund.',
+            'No noise texture, no random pixels, no grainy artifacts, no blurry background.',
           ].join(' ')
-        : 'Erzeuge die Kachel aus der folgenden Beschreibung.',
-      `Motiv: ${String(prompt).slice(0, 800)}`,
-      palette.length > 0 ? `Farbpalette: ${palette.join(', ')}` : '',
+        : 'Generate the pattern tile from the following description.',
+      `Pattern motif: ${String(translatedPrompt).slice(0, 800)}`,
+      palette.length > 0 ? `Color palette: ${palette.join(', ')}` : '',
       paletteSize
-        ? `Farbanzahl: ${paletteSize}. Verwende diese Anzahl als bewusste Entwurfsgrenze und vermeide zusätzliche dominante Farben.`
-        : 'Farbwahl: automatisch aus Motiv, Stil und eventuell im Prompt genannten Farben ableiten.',
+        ? `Color count: ${paletteSize}. Use this number as a strict design constraint and avoid additional dominant colors.`
+        : 'Color selection: automatically derive from motif, style, and colors mentioned in the prompt.',
       densityLine,
       colorLine,
-      'Ausgabe: eine einzelne quadratische Kachel, detailreich, drucktauglich, textile Illustration, seamless texture.',
+      'Output: a single square tile, highly detailed, print-ready, textile illustration, seamless texture.',
       // Die aktuelle Nutzeranweisung steht bewusst als letzter Block: am Promptende hat
       // sie das stärkste Gewicht und wird nicht von der Boilerplate davor verwässert.
       emphasisText
-        ? `Wichtigste, unbedingt deutlich sichtbar umzusetzende Anpassung: ${emphasisText}. Diese Änderung hat Vorrang vor allen anderen Details und muss eindeutig erkennbar sein.`
+        ? `Critical, must-be-visible adjustment: ${emphasisText}. This change has top priority over all other details and must be clearly recognizable.`
         : '',
     ]
       .filter(Boolean)
@@ -255,6 +377,7 @@ app.post('/api/generate-pattern', async (req, res) => {
       modelName: 'Z-Image Turbo (Seamless Tiling)',
       seed: typeof data?.seed === 'number' ? data.seed : stableSeed,
       note: '',
+      prompt: translatedPrompt,
     });
   } catch (error) {
     res.status(500).json({

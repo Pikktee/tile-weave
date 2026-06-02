@@ -942,13 +942,15 @@ function App() {
       setSettings(nextSettings);
       setTileImage(data.imageUrl);
       setActiveVersionId(nextVersionId);
+      const finalPrompt = data.prompt ?? requestPrompt;
+      setPrompt(finalPrompt);
       setVersions((current) => [
         {
           id: nextVersionId,
           name: `Version ${current.length + 1}`,
           image: data.imageUrl,
           settings: nextSettings,
-          prompt: requestPrompt,
+          prompt: finalPrompt,
           seed: typeof data.seed === 'number' ? data.seed : stableSeed,
           note: options?.versionNote?.trim() ?? '',
           imageAdjustments: { ...imageAdjustments },
