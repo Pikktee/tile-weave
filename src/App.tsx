@@ -905,6 +905,7 @@ function App() {
       mode,
       referenceImage,
       ...(typeof stableSeed === 'number' ? { seed: stableSeed } : {}),
+      skipTranslation: hasTile && !options?.emphasis,
     };
 
     setGenerationMode(mode);

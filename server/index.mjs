@@ -102,7 +102,7 @@ const translateToEnglish = async (text, apiKey) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a professional translator. Translate the user input into natural English. Keep all design terminology, styles, and colors precise. If the text is already in English or has no obvious translation, output it exactly as is. Output ONLY the translated text, do not wrap it in quotes, do not add notes, do not explain.',
+            content: 'Translate the input to English if it is not in English. If the input is already in English, return it exactly as is. Do not add any commentary, do not explain, and do not rephrase or expand keywords lists into sentences. Output ONLY the final translated text.',
           },
           {
             role: 'user',
@@ -149,9 +149,10 @@ Your task:
 1. Merge the base pattern description and the new modification/addition into a single, cohesive, descriptive English prompt.
 2. Remove any conversational instructions or meta-language like "add", "please include", "change the", "füge hinzu", "mach das".
 3. Group the main subjects (animals, plants, objects) together at the beginning of the prompt.
-4. Group colors, styling, and design keywords (e.g., pastel colors, flat illustration, watercolor) together at the end of the prompt.
+4. Group colors, styling, and design keywords together at the end of the prompt.
 5. Translate everything to English.
-6. Output ONLY the final merged English prompt. Do not add quotes, introductions, explanations, or notes.`,
+6. Do not introduce any new motifs, colors, or design styles that were not present in either the base prompt or the addition.
+7. Output ONLY the final merged English prompt. Do not add quotes, introductions, explanations, or notes.`,
     },
     {
       role: 'user',
@@ -257,11 +258,14 @@ app.post('/api/generate-pattern', async (req, res) => {
     emphasis,
     referenceImage,
     seed,
+    skipTranslation,
   } = req.body ?? {};
 
   try {
     // Merge base prompt und emphasis (Zusatzanweisung) und übersetze ins Englische
-    const translatedPrompt = await mergeAndTranslatePrompt(prompt, emphasis, apiKey);
+    const translatedPrompt = skipTranslation
+      ? prompt
+      : await mergeAndTranslatePrompt(prompt, emphasis, apiKey);
     const translatedEmphasis = await translateToEnglish(emphasis, apiKey);
 
     const requestedSeed = Number(seed);
