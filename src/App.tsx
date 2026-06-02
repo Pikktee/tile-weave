@@ -651,6 +651,7 @@ function App() {
   const [imageAdjustments, setImageAdjustments] = useState<ImageAdjustmentSettings>(initialImageAdjustments);
   const [offsetX, setOffsetX] = useState(50);
   const [offsetY, setOffsetY] = useState(50);
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const fabricSelectPointerFocusRef = useRef(false);
 
   const hasTile = Boolean(tileImage);
@@ -1424,39 +1425,55 @@ function App() {
 
           <div className="versions">
             {versions.length === 0 && <p className="empty-versions">Versionen erscheinen nach dem ersten Muster.</p>}
-            {versions.map((version) => (
-              <button
-                key={version.id}
-                className={activeVersionId === version.id ? 'active' : ''}
-                type="button"
-                onClick={() => restoreVersion(version)}
-              >
-                <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
-                <span>
-                  <strong>{version.name}</strong>
-                  {version.note && <small>{version.note}</small>}
-                </span>
-                <span
-                  className="control-tooltip control-tooltip--below"
-                  tabIndex={0}
-                  aria-label={`Genutzter Prompt: ${version.prompt}`}
-                  onClick={(event) => event.stopPropagation()}
+            {versions.map((version) => {
+              const isExpanded = expandedVersionId === version.id;
+              const isActive = activeVersionId === version.id;
+              return (
+                <div
+                  key={version.id}
+                  className={`version-item-wrapper${isActive ? ' active-version' : ''}${isExpanded ? ' expanded' : ''}`}
                 >
-                  <CircleHelp size={14} />
-                  <span className="control-tooltip-popup" role="tooltip" style={{ whiteSpace: 'normal', width: '220px', textTransform: 'none' }}>
-                    <strong>Genutzter Prompt (EN):</strong>
-                    <span style={{ display: 'block', marginTop: '4px', fontStyle: 'italic', wordBreak: 'break-word' }}>
-                      {version.prompt}
+                  <button
+                    type="button"
+                    onClick={() => restoreVersion(version)}
+                  >
+                    <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
+                    <span>
+                      <strong>{version.name}</strong>
+                      {version.note && <small>{version.note}</small>}
                     </span>
-                    {version.seed && (
-                      <span style={{ display: 'block', marginTop: '6px', fontSize: '0.7rem', opacity: 0.8 }}>
-                        Seed: {version.seed}
-                      </span>
-                    )}
-                  </span>
-                </span>
-              </button>
-            ))}
+                    <span
+                      className="version-info-toggle"
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Prompt-Details anzeigen"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedVersionId(isExpanded ? null : version.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setExpandedVersionId(isExpanded ? null : version.id);
+                        }
+                      }}
+                    >
+                      <CircleHelp size={14} />
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="version-prompt-detail">
+                      <strong>Prompt (EN):</strong>
+                      <p>{version.prompt}</p>
+                      {version.seed && (
+                        <div className="version-prompt-seed">Seed: {version.seed}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </aside>
       </section>
