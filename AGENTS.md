@@ -42,7 +42,7 @@ Bildqualitaet und Tempo werden pro Modus getrennt gesteuert. Initial zaehlt die 
 - `FAL_REFINE_STEPS`: optional, Standard ist `8`. Bereich 1-8. Niedrigere Werte sind schneller, fuehren beim Refinement aber schneller zu Rauschen.
 - `FAL_ACCELERATION`: optional, Standard ist `high`. Alternativ `regular` oder `none`.
 - `FAL_OUTPUT_FORMAT`: optional, Standard ist `png` (sauberer Export). Alternativ `jpeg` oder `webp` fuer kleinere Payloads.
-- `FAL_TRANSLATION_MODEL`: optional, Standard ist `meta-llama/llama-3-8b-instruct`. Steuert das LLM, das deutsche Nutzereingaben ins Englische übersetzt und strukturell optimiert (über OpenRouter).
+- `FAL_TRANSLATION_MODEL`: optional, Standard ist `openai/gpt-4o-mini`. Steuert das LLM, das deutsche Nutzereingaben ins Englische übersetzt und strukturell optimiert (über OpenRouter). Wichtig: ein instruktionstreues, schnelles Modell wählen – schwache Modelle (z. B. `meta-llama/llama-3-8b-instruct`) ignorieren die "Output ONLY"-Anweisung und liefern verbose Prosa oder laufen ins Timeout/Rate-Limit, wodurch der Merge in den simplen Fallback (Original + ", " + Zusatz, unübersetzt) faellt.
 - `PORT`: optional, Standard ist `8787`.
 
 Der Vite-Devserver proxyt `/api` an `http://127.0.0.1:8787`. Frontend-Code sollte deshalb weiterhin relative API-URLs wie `/api/generate-pattern` verwenden.
