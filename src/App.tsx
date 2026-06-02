@@ -1349,19 +1349,19 @@ function App() {
               {viewMode === 'kachel' && (
                 <>
                   <Layers3 size={22} />
-                  <span>Nahtprüfung</span>
+                  <span>Nahtprüfung der Kachel</span>
                 </>
               )}
               {viewMode === 'stoffbahn' && (
                 <>
                   <Ruler size={22} />
-                  <span>Stoffbahn</span>
+                  <span>Vorschau auf der Stoffbahn</span>
                 </>
               )}
               {viewMode === 'kleidung' && (
                 <>
                   <Shirt size={22} />
-                  <span>Kleidung</span>
+                  <span>Vorschau auf Kleidung</span>
                 </>
               )}
             </h2>
