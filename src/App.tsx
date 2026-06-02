@@ -84,6 +84,74 @@ const imageSettingsTooltip =
 const viewSettingsTooltip =
   'Steuert, wie die Kachel in der Stoffbahn-Vorschau liegt und wiederholt wird. Das ändert keine KI-Datei und ist nicht druckverbindlich.';
 
+// URL-Routing: jede Ansicht hat einen eigenen Pfad, damit Reload und
+// Zurueck/Vor des Browsers die richtige Ansicht treffen. Die Startseite ist '/'.
+const VIEW_TO_PATH: Record<ViewMode, string> = {
+  kachel: '/nahtpruefung',
+  stoffbahn: '/stoffbahn',
+  kleidung: '/kleidung',
+};
+const PATH_TO_VIEW: Record<string, ViewMode> = {
+  '/nahtpruefung': 'kachel',
+  '/stoffbahn': 'stoffbahn',
+  '/kleidung': 'kleidung',
+};
+const pathToView = (pathname: string): ViewMode | null => PATH_TO_VIEW[pathname] ?? null;
+
+// Session-Persistenz: nur sessionStorage (pro Tab, beim Schliessen geleert),
+// damit Reload den Arbeitsstand wiederherstellt, ohne Daten dauerhaft zu speichern.
+const SESSION_KEY = 'tile-weave:session';
+
+type SessionSnapshot = {
+  tileImage: string;
+  prompt: string;
+  versions: Version[];
+  activeVersionId: string;
+  settings: PatternSettings;
+  garmentType: GarmentType;
+  fabricSize: FabricSize;
+  imageAdjustments: ImageAdjustmentSettings;
+  offsetX: number;
+  offsetY: number;
+  viewMode: ViewMode;
+};
+
+const loadSession = (): SessionSnapshot | null => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionSnapshot;
+    if (!parsed || typeof parsed.tileImage !== 'string' || !parsed.tileImage) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const saveSession = (snapshot: SessionSnapshot) => {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Bei Speicherlimit (mehrere PNG-Data-URIs) reduziert sichern:
+    // nur die aktive Kachel ohne vollstaendige Versionshistorie.
+    try {
+      const active = snapshot.versions.find((version) => version.id === snapshot.activeVersionId);
+      const reduced: SessionSnapshot = { ...snapshot, versions: active ? [active] : [] };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(reduced));
+    } catch {
+      // Persistenz ist best-effort; bei hartem Limit wird nichts gesichert.
+    }
+  }
+};
+
+const clearSession = () => {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignorieren
+  }
+};
+
 const palettes = [
   ['#F45B69', '#21A8A3'],
   ['#F45B69', '#21A8A3', '#F7D66B', '#161514'],
@@ -632,27 +700,37 @@ function GarmentPreview({
 }
 
 function App() {
-  const [settings, setSettings] = useState<PatternSettings>(initialSettings);
-  const [viewMode, setViewMode] = useState<ViewMode>('kachel');
-  const [garmentType, setGarmentType] = useState<GarmentType>('hemd');
-  const [tileImage, setTileImage] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [versions, setVersions] = useState<Version[]>([]);
-  const [activeVersionId, setActiveVersionId] = useState('');
+  // Einmalig aus sessionStorage wiederherstellen (oder null bei frischer Sitzung).
+  const [restored] = useState<SessionSnapshot | null>(() => loadSession());
+  const [settings, setSettings] = useState<PatternSettings>(() => restored?.settings ?? initialSettings);
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => pathToView(window.location.pathname) ?? restored?.viewMode ?? 'kachel',
+  );
+  // Startseite zeigen, wenn keine Sitzung wiederhergestellt wurde oder die URL '/' ist.
+  const [atStart, setAtStart] = useState<boolean>(
+    () => !restored || pathToView(window.location.pathname) === null,
+  );
+  const [garmentType, setGarmentType] = useState<GarmentType>(() => restored?.garmentType ?? 'hemd');
+  const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
+  const [prompt, setPrompt] = useState(() => restored?.prompt ?? '');
+  const [versions, setVersions] = useState<Version[]>(() => restored?.versions ?? []);
+  const [activeVersionId, setActiveVersionId] = useState(() => restored?.activeVersionId ?? '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>('initial');
   const [message, setMessage] = useState('Idee eingeben und erstes Stoffmuster erzeugen.');
   const [previewTransform, setPreviewTransform] = useState<PanZoomState>(initialPanZoom);
   const [previewTool, setPreviewTool] = useState<PreviewTool>('pan');
-  const [fabricSize, setFabricSize] = useState<FabricSize>(initialFabricSize);
+  const [fabricSize, setFabricSize] = useState<FabricSize>(() => restored?.fabricSize ?? initialFabricSize);
   const [pointerFocusedFabricSelect, setPointerFocusedFabricSelect] = useState<keyof FabricSize | null>(null);
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [showNewIdeaConfirm, setShowNewIdeaConfirm] = useState(false);
   const [panStart, setPanStart] = useState<{ pointerX: number; pointerY: number; originX: number; originY: number } | null>(null);
   const [refinementInput, setRefinementInput] = useState('');
-  const [imageAdjustments, setImageAdjustments] = useState<ImageAdjustmentSettings>(initialImageAdjustments);
-  const [offsetX, setOffsetX] = useState(50);
-  const [offsetY, setOffsetY] = useState(50);
+  const [imageAdjustments, setImageAdjustments] = useState<ImageAdjustmentSettings>(
+    () => restored?.imageAdjustments ?? initialImageAdjustments,
+  );
+  const [offsetX, setOffsetX] = useState(() => restored?.offsetX ?? 50);
+  const [offsetY, setOffsetY] = useState(() => restored?.offsetY ?? 50);
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const fabricSelectPointerFocusRef = useRef(false);
 
@@ -661,6 +739,66 @@ function App() {
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
   const imageFilter = makeImageAdjustmentFilter(imageAdjustments);
+
+  // URL beim ersten Laden normalisieren: eine Ansichts-URL ohne wiederhergestellte
+  // Kachel ergibt keinen Sinn -> auf die Startseite zuruecksetzen. atStart ist in
+  // diesem Fall bereits initial true (keine Sitzung), daher reicht das URL-Update.
+  useEffect(() => {
+    if (!tileImage && pathToView(window.location.pathname)) {
+      window.history.replaceState(null, '', '/');
+    }
+    // Nur einmal beim Mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Zurueck/Vor des Browsers: Ansicht bzw. Startseite aus der URL uebernehmen.
+  useEffect(() => {
+    const handlePopState = () => {
+      const mode = pathToView(window.location.pathname);
+      if (mode) {
+        setAtStart(false);
+        setViewMode(mode);
+        setPreviewTransform(initialPanZoom);
+      } else {
+        setAtStart(true);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Arbeitsstand in sessionStorage spiegeln, damit ein Reload ihn wiederherstellt.
+  useEffect(() => {
+    if (!tileImage) {
+      clearSession();
+      return;
+    }
+    saveSession({
+      tileImage,
+      prompt,
+      versions,
+      activeVersionId,
+      settings,
+      garmentType,
+      fabricSize,
+      imageAdjustments,
+      offsetX,
+      offsetY,
+      viewMode,
+    });
+  }, [
+    tileImage,
+    prompt,
+    versions,
+    activeVersionId,
+    settings,
+    garmentType,
+    fabricSize,
+    imageAdjustments,
+    offsetX,
+    offsetY,
+    viewMode,
+  ]);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
     setSettings((current) => {
@@ -688,10 +826,20 @@ function App() {
     setPreviewTransform(initialPanZoom);
   };
 
+  // URL auf eine Ansicht setzen und einen Historieneintrag erzeugen.
+  const navigateToView = (mode: ViewMode) => {
+    const path = VIEW_TO_PATH[mode];
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+  };
+
   // Beim Wechsel des Bereichs Zoom/Pan auf 100 % zuruecksetzen.
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode);
+    setAtStart(false);
     setPreviewTransform(initialPanZoom);
+    navigateToView(mode);
   };
 
   const markFabricSelectPointerFocus = () => {
@@ -867,6 +1015,7 @@ function App() {
     setVersions([]);
     setActiveVersionId('');
     setViewMode('kachel');
+    setAtStart(true);
     setPreviewTool('pan');
     setPreviewTransform(initialPanZoom);
     setGenerationMode('initial');
@@ -875,6 +1024,10 @@ function App() {
     setImageAdjustments(initialImageAdjustments);
     setOffsetX(50);
     setOffsetY(50);
+    clearSession();
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
   };
 
   const handleNewIdeaClick = () => {
@@ -964,6 +1117,9 @@ function App() {
         },
         ...current,
       ]);
+      setAtStart(false);
+      // Beim ersten Muster aus der Startseite einen Historieneintrag fuer die Ansicht setzen.
+      navigateToView(viewMode);
       setMessage('Stoffmuster wurde erzeugt.');
     } catch (error) {
       setMessage(
@@ -996,11 +1152,19 @@ function App() {
     }
   };
 
-  if (!hasTile) {
+  if (atStart || !hasTile) {
     return (
       <main className="app-shell start-mode">
         <section className="start-screen" aria-label="Stoffmuster erzeugen">
-          <a className="brand start-brand" href="/" aria-label="Tile Weave Start">
+          <a
+            className="brand start-brand"
+            href="/"
+            aria-label="Tile Weave Start"
+            onClick={(event) => {
+              event.preventDefault();
+              handleNewIdeaClick();
+            }}
+          >
             <img src="/logo.svg" alt="" />
             <span>
               <strong>Tile Weave</strong>
@@ -1041,7 +1205,15 @@ function App() {
   return (
     <main className="app-shell refinement-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Tile Weave Start">
+        <a
+          className="brand"
+          href="/"
+          aria-label="Tile Weave Start"
+          onClick={(event) => {
+            event.preventDefault();
+            handleNewIdeaClick();
+          }}
+        >
           <img src="/logo.svg" alt="" />
           <span>
             <strong>Tile Weave</strong>
