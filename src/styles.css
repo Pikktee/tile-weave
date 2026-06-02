@@ -1541,7 +1541,7 @@ input[type="range"] {
 
 .versions button {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 52px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   min-width: 0;

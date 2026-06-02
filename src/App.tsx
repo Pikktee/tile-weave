@@ -1436,6 +1436,25 @@ function App() {
                   <strong>{version.name}</strong>
                   {version.note && <small>{version.note}</small>}
                 </span>
+                <span
+                  className="control-tooltip control-tooltip--below"
+                  tabIndex={0}
+                  aria-label={`Genutzter Prompt: ${version.prompt}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <CircleHelp size={14} />
+                  <span className="control-tooltip-popup" role="tooltip" style={{ whiteSpace: 'normal', width: '220px', textTransform: 'none' }}>
+                    <strong>Genutzter Prompt (EN):</strong>
+                    <span style={{ display: 'block', marginTop: '4px', fontStyle: 'italic', wordBreak: 'break-word' }}>
+                      {version.prompt}
+                    </span>
+                    {version.seed && (
+                      <span style={{ display: 'block', marginTop: '6px', fontSize: '0.7rem', opacity: 0.8 }}>
+                        Seed: {version.seed}
+                      </span>
+                    )}
+                  </span>
+                </span>
               </button>
             ))}
           </div>
