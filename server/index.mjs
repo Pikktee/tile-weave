@@ -85,7 +85,7 @@ app.use(express.json({ limit: '12mb' }));
 const translateToEnglish = async (text, apiKey) => {
   if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
 
-  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 Sekunden Timeout
 
@@ -137,7 +137,7 @@ const mergeAndTranslatePrompt = async (basePrompt, addition, apiKey) => {
   if (!basePrompt && !addition) return '';
   if (!addition) return translateToEnglish(basePrompt, apiKey);
 
-  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+  const model = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 Sekunden Timeout
 
@@ -197,7 +197,7 @@ Your task:
 
 app.get('/api/health', (_req, res) => {
   const ok = Boolean(process.env.FAL_KEY);
-  const translationModel = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+  const translationModel = process.env.FAL_TRANSLATION_MODEL || 'meta-llama/llama-3-8b-instruct';
 
   res.status(ok ? 200 : 500).json({
     ok,
