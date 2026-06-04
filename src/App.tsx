@@ -45,6 +45,7 @@ type Version = {
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 type GenerationMode = 'initial' | 'refine';
+type ImageModelKey = 'z-image' | 'flux-seamless' | 'gpt-image-2' | 'qwen-pro';
 type PanZoomState = {
   x: number;
   y: number;
@@ -69,8 +70,11 @@ const fabricHeightOptions = [70, 90, 100, 110, 140, 150];
 const initialFabricSize: FabricSize = { width: 150, height: 100 };
 
 const minPreviewZoom = 0.5;
-const maxPreviewZoom = 4.0;
+const maxPreviewZoom = 10.0;
 const previewZoomStep = 0.2;
+// Tastatur-Zoom multiplikativ (gleichmaessig ueber den grossen Zoombereich) und
+// bewusst groesser als der Klick-Schritt, damit es sich zuegig anfuehlt.
+const keyboardZoomFactor = 1.4;
 const initialPanZoom: PanZoomState = { x: 0, y: 0, zoom: 1 };
 const initialImageAdjustments: ImageAdjustmentSettings = {
   brightness: 0,
@@ -114,6 +118,7 @@ type SessionSnapshot = {
   offsetX: number;
   offsetY: number;
   viewMode: ViewMode;
+  imageModel: ImageModelKey;
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -185,6 +190,55 @@ const initialSettings: PatternSettings = {
   changeStrength: 28,
   repeatSize: 32,
   colors: palettes[1],
+};
+
+// Auswaehlbare Bild-KI-Modelle (Reihenfolge = Anzeige im Startscreen). `tiling: true`
+// = nativ randmatchende Kacheln; bei `false` ehrlich als "kann Naehte zeigen" markieren.
+// Schluessel muessen mit der Server-Registry (IMAGE_MODELS in server/index.mjs) uebereinstimmen.
+const IMAGE_MODELS: {
+  key: ImageModelKey;
+  label: string;
+  hint: string;
+  tiling: boolean;
+}[] = [
+  {
+    key: 'z-image',
+    label: 'Z-Image Turbo',
+    hint: 'Schnell, auf nahtlose Kacheln spezialisiert.',
+    tiling: true,
+  },
+  {
+    key: 'flux-seamless',
+    label: 'FLUX.1 Seamless',
+    hint: 'Mehr Detailtiefe, ebenfalls nahtlos via LoRA.',
+    tiling: true,
+  },
+  {
+    key: 'gpt-image-2',
+    label: 'GPT Image 2',
+    hint: 'Top-Qualität von OpenAI, ohne natives Tiling.',
+    tiling: false,
+  },
+  {
+    key: 'qwen-pro',
+    label: 'Qwen Image Pro',
+    hint: 'Sehr hohe Fidelity, ohne natives Tiling.',
+    tiling: false,
+  },
+];
+
+const defaultImageModel: ImageModelKey = 'z-image';
+const isImageModelKey = (value: unknown): value is ImageModelKey =>
+  IMAGE_MODELS.some((model) => model.key === value);
+
+// Grobe, erfahrungsbasierte Sekunden-Schaetzung der initialen Generierung je Modell.
+// Steuert nur die Lade-Animation (asymptotischer Fortschrittsbalken), nicht das Timeout.
+// gpt-image-2/qwen sind "quality over speed" und brauchen deutlich laenger als z-image.
+const MODEL_ESTIMATE_SEC: Record<ImageModelKey, number> = {
+  'z-image': 11,
+  'flux-seamless': 20,
+  'gpt-image-2': 60,
+  'qwen-pro': 60,
 };
 
 const downloadImage = (imageUrl: string, filename: string) => {
@@ -512,7 +566,7 @@ function FabricPreview({
   );
 }
 
-function LoadingOverlay({ mode }: { mode: GenerationMode }) {
+function LoadingOverlay({ mode, imageModel }: { mode: GenerationMode; imageModel: ImageModelKey }) {
   const [elapsedMs, setElapsedMs] = useState(0);
 
   useEffect(() => {
@@ -522,10 +576,13 @@ function LoadingOverlay({ mode }: { mode: GenerationMode }) {
     return () => window.clearInterval(id);
   }, []);
 
-  // Die Dauer ist nicht exakt vorhersehbar (Initial ~10 s, Refinement ~4 s, plus
-  // moegliche Cold Starts). Der Balken naehert sich daher asymptotisch ~95 % und
-  // springt erst beim Entfernen des Overlays (Generierung fertig) auf 100 %.
-  const estimateSec = mode === 'initial' ? 11 : 4;
+  // Die Dauer ist nicht exakt vorhersehbar und haengt stark vom gewaehlten Bildmodell ab:
+  // z-image ist schnell, gpt-image-2/qwen rechnen "quality over speed" deutlich laenger.
+  // Eine realistische Schaetzung haelt den Balken im Takt der tatsaechlichen Dauer, statt
+  // bei langsamen Modellen gefuehlt ewig bei ~95 % zu haengen. Der Balken naehert sich
+  // asymptotisch ~95 % und springt erst beim Entfernen des Overlays (fertig) auf 100 %.
+  // Refinement ist der ungenutzte z-image-img2img-Pfad und bleibt kurz.
+  const estimateSec = mode === 'refine' ? 4 : MODEL_ESTIMATE_SEC[imageModel];
   const elapsedSec = elapsedMs / 1000;
   const progress = Math.min(95, (1 - Math.exp(-elapsedSec / (estimateSec * 0.55))) * 100);
 
@@ -731,8 +788,13 @@ function App() {
   );
   const [offsetX, setOffsetX] = useState(() => restored?.offsetX ?? 50);
   const [offsetY, setOffsetY] = useState(() => restored?.offsetY ?? 50);
+  // Bild-KI-Modell wird im Startscreen gewaehlt und gilt fuer die ganze Sitzung.
+  const [imageModel, setImageModel] = useState<ImageModelKey>(() =>
+    isImageModelKey(restored?.imageModel) ? restored!.imageModel : defaultImageModel,
+  );
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const fabricSelectPointerFocusRef = useRef(false);
+  const stageBodyRef = useRef<HTMLDivElement>(null);
 
   const hasTile = Boolean(tileImage);
   const showGarmentControl = viewMode === 'kleidung';
@@ -785,6 +847,7 @@ function App() {
       offsetX,
       offsetY,
       viewMode,
+      imageModel,
     });
   }, [
     tileImage,
@@ -798,6 +861,7 @@ function App() {
     offsetX,
     offsetY,
     viewMode,
+    imageModel,
   ]);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
@@ -816,6 +880,35 @@ function App() {
 
   const updatePreviewZoom = (nextZoom: number) => {
     setPreviewTransform((current) => ({ ...current, zoom: clampPreviewZoom(nextZoom) }));
+  };
+
+  // Bildschirmmittelpunkt der Arbeitsflaeche; Anker fuer den Tastatur-Zoom.
+  const viewCenter = (): { x: number; y: number } | null => {
+    const rect = stageBodyRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  };
+
+  // Zoomt auf einen Zielwert und haelt dabei einen Ankerpunkt (Bildschirm-
+  // koordinaten, z. B. die Mauszeiger-Position) fix. Ohne Anker wird zentriert
+  // gezoomt. Referenz ist das untransformierte stage-body-Rechteck; die
+  // Bildschirmposition des transform-origin ist Container-Mitte + Versatz.
+  const zoomToAnchor = (resolveZoom: (currentZoom: number) => number, anchor: { x: number; y: number } | null) => {
+    const node = stageBodyRef.current;
+    const rect = node?.getBoundingClientRect();
+    setPreviewTransform((current) => {
+      const nextZoom = clampPreviewZoom(resolveZoom(current.zoom));
+      if (nextZoom === current.zoom) return current;
+      if (!anchor || !rect) return { ...current, zoom: nextZoom };
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const ratio = (nextZoom - current.zoom) / current.zoom;
+      return {
+        zoom: nextZoom,
+        x: current.x - ratio * (anchor.x - centerX - current.x),
+        y: current.y - ratio * (anchor.y - centerY - current.y),
+      };
+    });
   };
 
   const nudgePreview = (deltaX: number, deltaY: number) => {
@@ -902,13 +995,13 @@ function App() {
 
       if (event.key === '+' || event.key === '=') {
         event.preventDefault();
-        updatePreviewZoom(previewTransform.zoom + previewZoomStep);
+        zoomToAnchor((zoom) => zoom * keyboardZoomFactor, viewCenter());
         return;
       }
 
       if (event.key === '-') {
         event.preventDefault();
-        updatePreviewZoom(previewTransform.zoom - previewZoomStep);
+        zoomToAnchor((zoom) => zoom / keyboardZoomFactor, viewCenter());
         return;
       }
 
@@ -931,6 +1024,29 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewTransform.zoom]);
+
+  // Trackpad-Pinch (und Strg+Mausrad) loesen ein wheel-Event mit ctrlKey aus,
+  // das der Browser sonst als Seiten-Zoom interpretiert. Wir fangen es auf der
+  // Arbeitsflaeche ab und zoomen ausschliesslich die Kachelvorschau.
+  // Der Listener muss nativ und passiv:false sein, damit preventDefault greift.
+  // Wichtig: der stage-body wird erst nach dem Startscreen gerendert (atStart/
+  // hasTile), deshalb muss der Effect bei diesem Wechsel neu laufen, sonst ist
+  // stageBodyRef beim ersten Mount null und der Listener haengt nie.
+  useEffect(() => {
+    const node = stageBodyRef.current;
+    if (!node) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const pointer = { x: event.clientX, y: event.clientY };
+      const deltaY = event.deltaY;
+      zoomToAnchor((zoom) => zoom * Math.exp(-deltaY * 0.01), pointer);
+    };
+
+    node.addEventListener('wheel', handleWheel, { passive: false });
+    return () => node.removeEventListener('wheel', handleWheel);
+  }, [atStart, hasTile]);
 
   const startPreviewInteraction = (event: PointerEvent<HTMLDivElement>) => {
     if (isZoomMode && event.button === 0) {
@@ -1059,6 +1175,7 @@ function App() {
       colorStrength: settings.colorStrength,
       changeStrength: settings.changeStrength,
       mode,
+      model: imageModel,
       referenceImage,
       ...(typeof stableSeed === 'number' ? { seed: stableSeed } : {}),
       skipTranslation: hasTile && !options?.emphasis,
@@ -1182,6 +1299,31 @@ function App() {
               <PromptInput value={prompt} onChange={setPrompt} />
             </div>
 
+            <div className="model-field">
+              <span className="model-field__label" id="model-field-label">
+                Bild-KI-Modell
+              </span>
+              <div className="model-options" role="radiogroup" aria-labelledby="model-field-label">
+                {IMAGE_MODELS.map((model) => (
+                  <button
+                    key={model.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={imageModel === model.key}
+                    className={`model-option${imageModel === model.key ? ' active' : ''}`}
+                    onClick={() => setImageModel(model.key)}
+                    disabled={isGenerating}
+                  >
+                    <span className="model-option__name">{model.label}</span>
+                    <span className={`model-option__badge${model.tiling ? '' : ' model-option__badge--warn'}`}>
+                      {model.tiling ? 'Nahtlos' : 'Kann Nähte zeigen'}
+                    </span>
+                    <span className="model-option__hint">{model.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button
               className="primary-button start-submit"
               type="submit"
@@ -1195,7 +1337,7 @@ function App() {
                 {message}
               </p>
             )}
-            {isGenerating && <LoadingOverlay mode="initial" />}
+            {isGenerating && <LoadingOverlay mode="initial" imageModel={imageModel} />}
           </form>
         </section>
       </main>
@@ -1475,6 +1617,7 @@ function App() {
           </div>
 
           <div
+            ref={stageBodyRef}
             className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${panStart ? ' is-panning' : ''}`}
             onPointerDown={startPreviewInteraction}
             onPointerMove={movePreviewPan}
@@ -1547,7 +1690,7 @@ function App() {
             </div>
           </div>
 
-          {isGenerating && <LoadingOverlay mode={generationMode} />}
+          {isGenerating && <LoadingOverlay mode={generationMode} imageModel={imageModel} />}
         </section>
 
         <aside className="panel versions-panel" aria-label="Varianten">

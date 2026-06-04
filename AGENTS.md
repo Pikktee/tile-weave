@@ -41,25 +41,32 @@ Bildqualitaet und Tempo werden pro Modus getrennt gesteuert. Initial zaehlt die 
 - `FAL_REFINE_IMAGE_SIZE`: optional, Standard ist `768`. Aufloesung des Refinements. Hoeher setzen, wenn der Qualitaetssprung zur Initialkachel zu gross wirkt (kostet Tempo).
 - `FAL_REFINE_STEPS`: optional, Standard ist `8`. Bereich 1-8. Niedrigere Werte sind schneller, fuehren beim Refinement aber schneller zu Rauschen.
 - `FAL_ACCELERATION`: optional, Standard ist `high`. Alternativ `regular` oder `none`.
-- `FAL_OUTPUT_FORMAT`: optional, Standard ist `png` (sauberer Export). Alternativ `jpeg` oder `webp` fuer kleinere Payloads.
+- `FAL_OUTPUT_FORMAT`: optional, Standard ist `png` (sauberer Export). Alternativ `jpeg` oder `webp` fuer kleinere Payloads. Hinweis: `flux-seamless` unterstuetzt kein webp und faellt dann auf png zurueck.
+- `FAL_GPT_IMAGE_QUALITY`: optional, Standard ist `medium`. Nur fuer das Modell `gpt-image-2` relevant; steuert dessen Qualitaet und Kosten (`low` ~$0,01 bis `high` ~$0,41 pro Bild). Werte: `auto`, `low`, `medium`, `high`.
+- `FAL_GENERATE_TIMEOUT_MS`: optional, Standard ist `120000` (120 s), Bereich 10000-300000. Obergrenze fuer einen einzelnen Bild-Request an fal. Greift bei Haengern; langsame Modelle (`gpt-image-2`, `qwen-pro`) rechnen "quality over speed" und brauchen teils ueber eine Minute, daher der grosszuegige Default. Bei Timeout liefert der Server HTTP 504 mit verstaendlicher deutscher Meldung.
 - `FAL_TRANSLATION_MODEL`: optional, Standard ist `openai/gpt-4o-mini`. Steuert das LLM, das deutsche Nutzereingaben ins Englische übersetzt und strukturell optimiert (über OpenRouter). Wichtig: ein instruktionstreues, schnelles Modell wählen – schwache Modelle (z. B. `meta-llama/llama-3-8b-instruct`) ignorieren die "Output ONLY"-Anweisung und liefern verbose Prosa oder laufen ins Timeout/Rate-Limit, wodurch der Merge in den simplen Fallback (Original + ", " + Zusatz, unübersetzt) faellt.
 - `PORT`: optional, Standard ist `8787`.
 
 Der Vite-Devserver proxyt `/api` an `http://127.0.0.1:8787`. Frontend-Code sollte deshalb weiterhin relative API-URLs wie `/api/generate-pattern` verwenden.
 
-fal.ai-Bildgenerierung laeuft synchron ueber `https://fal.run/fal-ai/z-image/turbo/tiling/lora` (Z-Image Turbo mit Seamless-Tiling-LoRA).
+fal.ai-Bildgenerierung laeuft synchron. Nutzer waehlen im Startscreen eines von vier Bildmodellen; die Wahl gilt fuer die ganze Sitzung (auch fuer Prompt-Chat-Verfeinerungen) und wird in `sessionStorage` gespiegelt. Eine Modell-Registry in `server/index.mjs` (`IMAGE_MODELS`, Default `z-image`) kapselt pro Modell das fal-Request-Schema; das Frontend sendet den gewaehlten Schluessel als `model` im Payload. Die Schluessel muessen zwischen `IMAGE_MODELS` im Server und der gleichnamigen Konstante in `src/App.tsx` synchron bleiben.
+
+- `z-image` (Default, **nativ nahtlos**): `fal-ai/z-image/turbo/tiling/lora`, Z-Image Turbo mit Seamless-Tiling-LoRA. `tiling_mode: 'both'`, `acceleration`, Steps 1-8 aus `FAL_INIT_*`/`FAL_REFINE_*`. Einziges Modell mit img2img-Refinement-Pfad.
+- `flux-seamless` (**nahtlos via LoRA**): `fal-ai/flux-lora` mit der Seamless-Texture-LoRA (`gokaygokay/Flux-Seamless-Texture-LoRA`), 28 Steps, `guidance_scale` 3.5, kein webp, kein img2img.
+- `gpt-image-2` (**kein natives Tiling**): `openai/gpt-image-2`, aktuellstes OpenAI-Bildmodell. `quality` aus `FAL_GPT_IMAGE_QUALITY`; kein seed/steps/tiling.
+- `qwen-pro` (**kein natives Tiling**): `fal-ai/qwen-image-2/pro/text-to-image`, 35 Steps, `negative_prompt` gegen sichtbare Naehte.
 
 - Auth-Header ist `Authorization: Key <FAL_KEY>`.
-- Das Modell ist auf nahtlose Kacheln spezialisiert (`tiling_mode: 'both'`); `image_size` und `num_inference_steps` werden je Modus aus den `FAL_INIT_*`/`FAL_REFINE_*`-Variablen abgeleitet.
-- Initiale Generierung ist text-to-image; Refinement ist img2img und sendet die bestehende Kachel als `image_url` mit `strength` aus `changeStrength`.
+- LoRA-Modelle (`z-image`, `flux-seamless`) bekommen das Triggerwort `smlstxtr` in den Prompt; die uebrigen nicht, behalten aber die Seamless-Prosa. Modelle ohne natives Tiling koennen sichtbare Naehte erzeugen und sind im Startscreen ehrlich als "Kann Naehte zeigen" markiert. `image_size`/`num_inference_steps` leiten sich je Modell aus dem jeweiligen `buildInput`-Adapter ab.
+- Initiale Generierung ist text-to-image; das img2img-Refinement (`image_url` + `strength` aus `changeStrength`) gibt es nur fuer `z-image` und wird aus der UI ohnehin nicht aufgerufen.
 - `sync_mode: true` liefert das Bild direkt als Data-URI zurueck, damit Farbanalyse und PNG-Export im Frontend ohne Cross-Origin-Probleme funktionieren.
 - `referenceImage` kann als Data-URI gross werden; Express akzeptiert deshalb JSON bis `12mb`.
-- `/api/health` meldet Provider, Modell, Initial-/Refinement-`imageSize`, Inference-Steps, Beschleunigung, Ausgabeformat sowie Übersetzungs-Status und -Modell und prueft, ob `FAL_KEY` gesetzt ist.
+- `/api/health` meldet Provider, den Default-Schluessel (`defaultModel`), die Modellliste (`models` mit `key`/`id`/`label`/`tiling`), Initial-/Refinement-`imageSize`, Inference-Steps, Beschleunigung, Ausgabeformat sowie Übersetzungs-Status und -Modell und prueft, ob `FAL_KEY` gesetzt ist.
 
 ## Architekturhinweise
 
 - Die App ist bewusst klein gehalten. Bevor neue Abstraktionen eingefuehrt werden, pruefen, ob die bestehende Struktur in `App.tsx` und `styles.css` ausreicht.
-- `PatternSettings` (Felder: `density`, `colorStrength`, `changeStrength`, `repeatSize`, `colors`), `Version`, `ViewMode` und `GenerationMode` beschreiben den zentralen UI-Vertrag. Aenderungen daran muessen mit den API-Payloads und allen Ansichten abgeglichen werden. `density`, `colorStrength` und `changeStrength` sind aktuell aus der UI ausgeblendet (siehe Reglerlogik); Typ, State und Server-Defaults bleiben aber bestehen.
+- `PatternSettings` (Felder: `density`, `colorStrength`, `changeStrength`, `repeatSize`, `colors`), `Version`, `ViewMode`, `GenerationMode` und `ImageModelKey` beschreiben den zentralen UI-Vertrag. `imageModel` (Typ `ImageModelKey`) ist bewusst kein `PatternSettings`-Feld, sondern eigener Top-Level-State (Engine-Wahl, nicht Mustersetting), wird aber ebenfalls in `sessionStorage` gespiegelt. Aenderungen daran muessen mit den API-Payloads und allen Ansichten abgeglichen werden. `density`, `colorStrength` und `changeStrength` sind aktuell aus der UI ausgeblendet (siehe Reglerlogik); Typ, State und Server-Defaults bleiben aber bestehen.
 - Generierung ist asynchron und nutzerseitig fehlertolerant. Fehler sollen als verstaendliche deutsche Statusmeldung in `message` landen.
 - Versionen leben im React-State und werden zusaetzlich in `sessionStorage` (Key `tile-weave:session`) gespiegelt, damit ein Page-Reload den Arbeitsstand wiederherstellt. Bewusst nur `sessionStorage` (pro Tab, beim Schliessen geleert) statt `localStorage`, um Datenschutz und das ~5MB-Limit (mehrere PNG-Data-URIs) zu schonen. `saveSession()` degradiert bei Quota-Fehler auf nur die aktive Kachel; `loadSession()` ist defensiv. Keine dauerhafte Persistenz (localStorage/Backend) einbauen, ohne UX, Datenschutz und Speichergrenzen erneut mitzudenken.
 - URL-Routing laeuft ueber die History-API ohne Router-Lib: Startseite ist `/`, die drei Ansichten haben eigene Pfade (`VIEW_TO_PATH`: Nahtpruefung=`/nahtpruefung`, `/stoffbahn`, `/kleidung`). Ansichtswechsel pushen einen Historieneintrag (`changeViewMode`), `Neue Idee`/Reset pusht `/`, ein `popstate`-Listener uebernimmt Zurueck/Vor in den State. Beim Mount wird eine Ansichts-URL ohne wiederhergestellte Kachel auf `/` zurueckgesetzt. `atStart` entkoppelt die Startansicht vom reinen `hasTile`-Zustand, damit Zurueck zur Startseite die Sitzung nicht zerstoert. Reload auf einem Ansichtspfad funktioniert, weil der Vite-Devserver und `npm run preview` SPA-Fallback auf `index.html` liefern.
@@ -105,7 +112,7 @@ Farblogik:
 - Icons kommen aus `lucide-react`; vorhandene Button- und Tab-Muster bevorzugen.
 - Responsive Layouts fuer Desktop und Mobile mitpruefen, besonders `max-width: 1180px` und `max-width: 720px`.
 - Bewegungen duerfen nur unter `prefers-reduced-motion: no-preference` ergaenzt werden.
-- Waehrend der KI-Generierung eine moderne Lade-Animation anzeigen. Aktuell nutzt `LoadingOverlay` Web-Loader, asymptotischen Fortschrittsbalken und Sekundenanzeige (Initial ca. 11 s, Refinement ca. 4 s geschaetzt). Keine Statusmeldung im Stil "Briefing geaendert..." verwenden.
+- Waehrend der KI-Generierung eine moderne Lade-Animation anzeigen. Aktuell nutzt `LoadingOverlay` Web-Loader, asymptotischen Fortschrittsbalken und Sekundenanzeige. Die Zeitschaetzung ist modellbewusst (`MODEL_ESTIMATE_SEC`: z-image ~11 s, flux-seamless ~20 s, gpt-image-2/qwen-pro ~60 s; Refinement ~4 s), damit der Balken bei langsamen Modellen nicht gefuehlt bei ~95 % haengt. Keine Statusmeldung im Stil "Briefing geaendert..." verwenden.
 - Keine fixen realen Massangaben wie `150 cm` oder `200 cm` an responsive Vorschauflaechen schreiben. Die Stoffbahn ist eine Simulation und nicht massstabsgetreu.
 - Wenn Mass-/Skalierungsbegriffe gebraucht werden, klar zwischen echter Kachel, Rapportmass und simulierter, nicht druckverbindlicher Vorschau unterscheiden.
 

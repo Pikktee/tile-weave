@@ -7,11 +7,11 @@ dotenv.config({ path: '.env.local', override: false });
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
 
-// Bildgenerierung läuft über fal.ai mit Z-Image Turbo + Seamless-Tiling-LoRA.
-// Das Modell erzeugt schnell (8-Step-Pipeline) echt randmatchende Kacheln und
-// unterstützt img2img für das Refinement bestehender Kacheln.
-const FAL_MODEL = 'fal-ai/z-image/turbo/tiling/lora';
-const FAL_ENDPOINT = `https://fal.run/${FAL_MODEL}`;
+// Bildgenerierung läuft über fal.ai. Nutzer wählen im Startscreen eines von mehreren
+// Modellen; jedes hat ein eigenes Request-Schema, das hier über eine Registry gekapselt
+// wird (siehe IMAGE_MODELS weiter unten). Standard ist Z-Image Turbo + Seamless-Tiling-LoRA:
+// schnelle 8-Step-Pipeline, echt randmatchende Kacheln, img2img-Refinement.
+const DEFAULT_MODEL = 'z-image';
 
 const sizePresets = new Set([
   'square_hd',
@@ -77,6 +77,110 @@ const resolveRefineStrength = (changeStrength = 28) => {
   // Die UI-Skala darf mutige Entwurfsabstaende ausdruecken, aber img2img wird
   // bewusst konservativ gehalten: zu hohe strength zerstoert Rapport und Motive.
   return Number((0.1 + normalized * 0.34).toFixed(2));
+};
+
+// Obergrenze fuer einen einzelnen Bild-Request an fal. Langsame Modelle (gpt-image-2,
+// qwen) rechnen "quality over speed" und brauchen teils ueber eine Minute; der Default
+// ist daher grosszuegig. Ohne Limit wuerde ein echter Hänger die UI unbegrenzt blockieren.
+const resolveGenerateTimeoutMs = () => {
+  const requested = Number(process.env.FAL_GENERATE_TIMEOUT_MS);
+  if (!Number.isFinite(requested)) return 120000;
+  return Math.max(10000, Math.min(300000, Math.round(requested)));
+};
+
+// GPT Image 2 ist stark preisgestaffelt (low ~$0,01 bis high ~$0,41 pro Bild).
+// Default ist 'medium' als Kompromiss aus Kosten und Qualitaet; per Env uebersteuerbar.
+const gptImageQualities = new Set(['auto', 'low', 'medium', 'high']);
+const resolveGptImageQuality = () => {
+  const requested = process.env.FAL_GPT_IMAGE_QUALITY || 'medium';
+  return gptImageQualities.has(requested) ? requested : 'medium';
+};
+
+// FLUX-LoRA fuer nahtlose Texturen (gokaygokay). Triggerwort `smlstxtr` ist dasselbe,
+// das auch die Z-Image-Tiling-LoRA verwendet, daher teilen sich beide Modelle den Prefix.
+const FLUX_SEAMLESS_LORA =
+  'https://huggingface.co/gokaygokay/Flux-Seamless-Texture-LoRA/resolve/main/seamless_texture.safetensors';
+
+// Modell-Registry. Jeder Eintrag kapselt das fal-Request-Schema seines Modells.
+//   tiling   -> Modell erzeugt nativ randmatchende Kacheln (Info fuer Frontend/health).
+//   lora     -> Prompt bekommt das Seamless-Triggerwort `smlstxtr`.
+//   allowWebp-> Modell unterstuetzt webp als Ausgabeformat (flux-lora tut das nicht).
+//   buildInput -> baut den modellspezifischen Teil des fal-Inputs.
+// Gemeinsame Felder (output_format, num_images, sync_mode) ergaenzt der Handler.
+const IMAGE_MODELS = {
+  'z-image': {
+    id: 'fal-ai/z-image/turbo/tiling/lora',
+    label: 'Z-Image Turbo (Seamless Tiling)',
+    tiling: true,
+    lora: true,
+    allowWebp: true,
+    buildInput: ({ prompt, sizeMode, isRefinement, referenceImage, changeStrength, seed }) => ({
+      prompt,
+      image_size: resolveImageSize(sizeMode),
+      num_inference_steps: resolveInferenceSteps(sizeMode),
+      tiling_mode: 'both',
+      acceleration: resolveAcceleration(),
+      ...(seed !== null ? { seed } : {}),
+      ...(isRefinement
+        ? { image_url: referenceImage, strength: resolveRefineStrength(changeStrength) }
+        : {}),
+    }),
+  },
+  'flux-seamless': {
+    id: 'fal-ai/flux-lora',
+    label: 'FLUX.1 dev + Seamless-Texture-LoRA',
+    tiling: true,
+    lora: true,
+    allowWebp: false,
+    buildInput: ({ prompt, seed }) => ({
+      prompt,
+      image_size: resolveImageSize('initial'),
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      acceleration: 'regular',
+      loras: [{ path: FLUX_SEAMLESS_LORA, scale: 1 }],
+      ...(seed !== null ? { seed } : {}),
+    }),
+  },
+  'gpt-image-2': {
+    id: 'openai/gpt-image-2',
+    label: 'GPT Image 2 (OpenAI)',
+    tiling: false,
+    lora: false,
+    allowWebp: true,
+    // Kein seed/steps/tiling im Schema; Qualitaet steuert Kosten und Detailtiefe.
+    buildInput: ({ prompt }) => ({
+      prompt,
+      image_size: resolveImageSize('initial'),
+      quality: resolveGptImageQuality(),
+    }),
+  },
+  'qwen-pro': {
+    id: 'fal-ai/qwen-image-2/pro/text-to-image',
+    label: 'Qwen Image 2.0 Pro',
+    tiling: false,
+    lora: false,
+    allowWebp: true,
+    buildInput: ({ prompt, seed }) => ({
+      prompt,
+      image_size: resolveImageSize('initial'),
+      num_inference_steps: 35,
+      guidance_scale: 4,
+      // Kein natives Tiling: negativ gegen sichtbare Naehte/Rahmen/Mockup gegensteuern.
+      negative_prompt:
+        'visible seams, tile borders, frame, mockup, clothing, perspective, shadows',
+      ...(seed !== null ? { seed } : {}),
+    }),
+  },
+};
+
+const resolveModel = (key) =>
+  (typeof key === 'string' && IMAGE_MODELS[key]) || IMAGE_MODELS[DEFAULT_MODEL];
+
+// flux-lora akzeptiert kein webp; auf png zurueckfallen statt fal-Fehler zu riskieren.
+const resolveOutputFormatFor = (entry) => {
+  const format = resolveOutputFormat();
+  return !entry.allowWebp && format === 'webp' ? 'png' : format;
 };
 
 // referenceImage wird beim Refinement als Data-URI mitgesendet und kann groß sein.
@@ -203,7 +307,13 @@ app.get('/api/health', (_req, res) => {
   res.status(ok ? 200 : 500).json({
     ok,
     provider: 'fal.ai',
-    imageModel: FAL_MODEL,
+    defaultModel: DEFAULT_MODEL,
+    models: Object.entries(IMAGE_MODELS).map(([key, entry]) => ({
+      key,
+      id: entry.id,
+      label: entry.label,
+      tiling: entry.tiling,
+    })),
     initial: { imageSize: resolveImageSize('initial'), inferenceSteps: resolveInferenceSteps('initial') },
     refine: { imageSize: resolveImageSize('refine'), inferenceSteps: resolveInferenceSteps('refine') },
     acceleration: resolveAcceleration(),
@@ -259,7 +369,10 @@ app.post('/api/generate-pattern', async (req, res) => {
     referenceImage,
     seed,
     skipTranslation,
+    model,
   } = req.body ?? {};
+
+  const modelEntry = resolveModel(model);
 
   try {
     // Merge base prompt und emphasis (Zusatzanweisung) und übersetze ins Englische
@@ -277,7 +390,13 @@ app.post('/api/generate-pattern', async (req, res) => {
       : palette.length > 0
         ? palette.length
         : null;
-    const isRefinement = mode === 'refine' && typeof referenceImage === 'string' && referenceImage.length > 0;
+    // img2img-Refinement existiert nur im Z-Image-Schema (image_url/strength). Andere
+    // Modelle generieren immer text-to-image; ein etwaiges referenceImage wird ignoriert.
+    const isRefinement =
+      mode === 'refine' &&
+      modelEntry.id === IMAGE_MODELS['z-image'].id &&
+      typeof referenceImage === 'string' &&
+      referenceImage.length > 0;
     // Dichte und Farbintensität nur dann in den Prompt schreiben, wenn sie klar vom
     // neutralen Mittelbereich abweichen. Steht ein Wert im Mittelfeld (z. B. weil der
     // Regler in der UI ausgeblendet ist und auf Default bleibt), erzeugt er nur
@@ -305,7 +424,11 @@ app.post('/api/generate-pattern', async (req, res) => {
     const cleanEmphasis = typeof translatedEmphasis === 'string' ? translatedEmphasis.trim() : '';
     const emphasisText = cleanEmphasis.length > 0 ? cleanEmphasis.slice(0, 300) : '';
     const requestPrompt = [
-      'smlstxtr, seamless tileable pattern tile for apparel fabric, seamless texture.',
+      // `smlstxtr` ist das Triggerwort der Seamless-LoRAs (z-image, flux). Modelle ohne
+      // LoRA (gpt-image-2, qwen) bekommen es nicht, dafuer bleibt die Tiling-Prosa erhalten.
+      modelEntry.lora
+        ? 'smlstxtr, seamless tileable pattern tile for apparel fabric, seamless texture.'
+        : 'Seamless tileable pattern tile for apparel fabric, seamless repeating texture.',
       'Flat 2D pattern only, no clothing, no mockup, no border, no perspective, no shadows.',
       'The tile must be visually continuous on all four sides and function as a seamless repeat pattern.',
       isRefinement
@@ -333,33 +456,52 @@ app.post('/api/generate-pattern', async (req, res) => {
       .join('\n');
 
     const input = {
-      prompt: requestPrompt,
-      image_size: resolveImageSize(isRefinement ? 'refine' : 'initial'),
-      num_inference_steps: resolveInferenceSteps(isRefinement ? 'refine' : 'initial'),
-      tiling_mode: 'both',
-      acceleration: resolveAcceleration(),
-      output_format: resolveOutputFormat(),
+      // Modellspezifischer Teil (Schema je fal-Modell) kommt aus der Registry.
+      ...modelEntry.buildInput({
+        prompt: requestPrompt,
+        sizeMode: isRefinement ? 'refine' : 'initial',
+        isRefinement,
+        referenceImage,
+        changeStrength,
+        seed: stableSeed,
+      }),
+      // Gemeinsame Felder fuer alle Modelle.
+      output_format: resolveOutputFormatFor(modelEntry),
       num_images: 1,
       // sync_mode liefert das Bild direkt als Data-URI zurück, damit Farbanalyse
       // und PNG-Export im Frontend ohne Cross-Origin-Probleme funktionieren.
       sync_mode: true,
-      ...(stableSeed !== null ? { seed: stableSeed } : {}),
-      ...(isRefinement
-        ? {
-            image_url: referenceImage,
-            strength: resolveRefineStrength(changeStrength),
-          }
-        : {}),
     };
 
-    const response = await fetch(FAL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Key ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+    // Bild-Request gegen Endlos-Haenger absichern: nach Timeout abbrechen und dem
+    // Frontend eine verstaendliche Meldung statt einer unbegrenzt offenen Anfrage liefern.
+    const timeoutMs = resolveGenerateTimeoutMs();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(`https://fal.run/${modelEntry.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Key ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        res.status(504).json({
+          error: `Das Modell „${modelEntry.label}" hat nach ${Math.round(
+            timeoutMs / 1000,
+          )} s nicht geantwortet. Bitte erneut versuchen oder ein schnelleres Modell waehlen.`,
+        });
+        return;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const data = await readFalJson(response);
 
@@ -377,8 +519,8 @@ app.post('/api/generate-pattern', async (req, res) => {
 
     res.json({
       imageUrl,
-      model: FAL_MODEL,
-      modelName: 'Z-Image Turbo (Seamless Tiling)',
+      model: modelEntry.id,
+      modelName: modelEntry.label,
       seed: typeof data?.seed === 'number' ? data.seed : stableSeed,
       note: '',
       prompt: translatedPrompt,
