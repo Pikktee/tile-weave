@@ -1741,6 +1741,77 @@ input[type="range"] {
   border: 1px solid rgba(25, 23, 22, 0.12);
 }
 
+/* Hintergrund-Variante: gleiche Rasterung wie der Versions-Button, aber ohne Klick. */
+.version-static {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px;
+}
+
+.version-thumb.pending,
+.version-thumb.error {
+  display: grid;
+  place-items: center;
+  background: var(--dark);
+}
+
+.version-thumb.error {
+  color: var(--gold);
+}
+
+/* Mosaik-Platzhalter: 4x4-Raster, das sich diagonal aufbaut (Animation unter
+   prefers-reduced-motion: no-preference). Ohne Bewegung bleibt ein statisches Mosaik. */
+.version-thumb.pending {
+  overflow: hidden;
+}
+
+.mosaic-loader {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+}
+
+.mosaic-loader span {
+  border-radius: 2px;
+  opacity: 0.82;
+}
+
+.version-item-wrapper.is-error {
+  border-color: rgba(244, 91, 105, 0.4);
+  background: rgba(244, 91, 105, 0.05);
+}
+
+.version-item-wrapper.is-error small {
+  color: var(--coral);
+  white-space: normal;
+}
+
+.version-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.version-dismiss:hover {
+  background: rgba(244, 91, 105, 0.12);
+  color: var(--coral);
+}
+
 .versions strong,
 .versions small {
   display: block;
@@ -1953,6 +2024,11 @@ input[type="range"] {
     animation: weaveLoom 3.4s ease-in-out infinite;
   }
 
+  .mosaic-loader span {
+    opacity: 0.12;
+    animation: mosaicBuild 2.4s ease-in-out infinite;
+  }
+
   .generating-progress span {
     animation: weaveSheen 1.8s linear infinite;
   }
@@ -1989,6 +2065,22 @@ input[type="range"] {
   50% {
     transform: scale(1.08);
     opacity: 1;
+  }
+}
+
+@keyframes mosaicBuild {
+  0% {
+    opacity: 0.12;
+    transform: scale(0.55);
+  }
+  35%,
+  65% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.12;
+    transform: scale(0.55);
   }
 }
 

@@ -16,7 +16,9 @@ import {
   Shirt,
   SlidersHorizontal,
   Sparkles,
+  TriangleAlert,
   Wand2,
+  X,
   ZoomIn,
 } from 'lucide-react';
 
@@ -41,6 +43,10 @@ type Version = {
   imageAdjustments: ImageAdjustmentSettings;
   offsetX: number;
   offsetY: number;
+  // Hintergrund-Generierung einer Variante: 'pending' zeigt eine Lade-Animation als
+  // Vorschau, 'error' eine entfernbare Fehlerkachel. Fertige Varianten haben kein status.
+  status?: 'pending' | 'error';
+  errorMessage?: string;
 };
 
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
@@ -65,6 +71,14 @@ type ImageAdjustmentSettings = {
 const minColorCount = 2;
 const maxColorCount = 6;
 const colorSuggestions = ['#F45B69', '#21A8A3', '#F7D66B', '#161514', '#F4EFE6', '#0B6E69'];
+// Markenfarben fuer das animierte Mosaik-Thumbnail einer noch generierenden Variante.
+const mosaicColors = ['#F45B69', '#21A8A3', '#F7D66B', '#F4EFE6'];
+const mosaicCells = Array.from({ length: 16 }, (_, index) => {
+  const row = Math.floor(index / 4);
+  const col = index % 4;
+  // Diagonale Welle: Farbe und Verzoegerung folgen (row + col) -> Kachel "webt" sich auf.
+  return { color: mosaicColors[(row + col) % mosaicColors.length], delay: (row + col) * 0.12 };
+});
 const fabricWidthOptions = [50, 100, 150, 200, 250, 300];
 const fabricHeightOptions = [70, 90, 100, 110, 140, 150];
 const initialFabricSize: FabricSize = { width: 150, height: 100 };
@@ -756,6 +770,20 @@ function GarmentPreview({
   );
 }
 
+// Animiertes Mosaik-Thumbnail fuer eine Variante, die noch generiert wird: ein 4x4-Raster,
+// das sich diagonal "aufbaut" und so einen entstehenden Bild-Platzhalter andeutet.
+function MosaicThumb() {
+  return (
+    <span className="version-thumb pending" aria-hidden="true">
+      <span className="mosaic-loader">
+        {mosaicCells.map((cell, index) => (
+          <span key={index} style={{ backgroundColor: cell.color, animationDelay: `${cell.delay}s` }} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 function App() {
   // Einmalig aus sessionStorage wiederherstellen (oder null bei frischer Sitzung).
   const [restored] = useState<SessionSnapshot | null>(() => loadSession());
@@ -795,12 +823,28 @@ function App() {
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const fabricSelectPointerFocusRef = useRef(false);
   const stageBodyRef = useRef<HTMLDivElement>(null);
+  // Aktuelle Werte fuer asynchrone Varianten-Generierung im Hintergrund lesbar halten:
+  // der Completion-Callback laeuft spaeter und darf nicht auf veraltete Closures zugreifen.
+  const activeVersionIdRef = useRef(activeVersionId);
+  const versionsRef = useRef(versions);
 
   const hasTile = Boolean(tileImage);
+  // Ist die aktuell ausgewaehlte Variante noch in Generierung? Dann zeigt der Canvas den
+  // grossen Ladescreen (statt der noch leeren Kachel).
+  const activeIsPending = versions.some(
+    (version) => version.id === activeVersionId && version.status === 'pending',
+  );
   const showGarmentControl = viewMode === 'kleidung';
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
   const imageFilter = makeImageAdjustmentFilter(imageAdjustments);
+
+  useEffect(() => {
+    activeVersionIdRef.current = activeVersionId;
+  }, [activeVersionId]);
+  useEffect(() => {
+    versionsRef.current = versions;
+  }, [versions]);
 
   // URL beim ersten Laden normalisieren: eine Ansichts-URL ohne wiederhergestellte
   // Kachel ergibt keinen Sinn -> auf die Startseite zuruecksetzen. atStart ist in
@@ -838,7 +882,9 @@ function App() {
     saveSession({
       tileImage,
       prompt,
-      versions,
+      // Noch laufende oder fehlgeschlagene Hintergrund-Varianten nicht persistieren:
+      // ihr Bild ist leer und die Generierung wird bei einem Reload nicht fortgesetzt.
+      versions: versions.filter((version) => !version.status),
       activeVersionId,
       settings,
       garmentType,
@@ -1116,6 +1162,8 @@ function App() {
   };
 
   const restoreVersion = (version: Version) => {
+    // Platzhalter (noch in Generierung) oder Fehlerkacheln haben kein nutzbares Bild.
+    if (version.status) return;
     setSettings(version.settings);
     setPrompt(version.prompt);
     setTileImage(version.image);
@@ -1123,6 +1171,11 @@ function App() {
     setImageAdjustments(version.imageAdjustments ?? initialImageAdjustments);
     setOffsetX(version.offsetX ?? 50);
     setOffsetY(version.offsetY ?? 50);
+  };
+
+  // Entfernt eine fehlgeschlagene Hintergrund-Variante aus der Liste.
+  const dismissVersion = (id: string) => {
+    setVersions((current) => current.filter((version) => version.id !== id));
   };
 
   const resetToStart = () => {
@@ -1249,16 +1302,129 @@ function App() {
     }
   };
 
+  // Variante im Hintergrund erzeugen: legt sofort einen Platzhalter mit Lade-Animation
+  // in der Liste an und blockiert die UI nicht (kein globales isGenerating, kein grosses
+  // Canvas-Overlay). So kann der Nutzer waehrend der Generierung bestehende Varianten
+  // ansehen. Bei Erfolg wird der Platzhalter durch das Ergebnis ersetzt; nur wenn der
+  // Nutzer zwischenzeitlich nicht selbst die aktive Variante gewechselt hat, springt die
+  // Ansicht automatisch zur fertigen Variante.
+  const generateVariant = async (options?: { emphasis?: string }) => {
+    const emphasis = options?.emphasis;
+    const requestPrompt = prompt.trim();
+    const baseSettings = settings;
+    const baseAdjustments = { ...imageAdjustments };
+    const baseOffsetX = offsetX;
+    const baseOffsetY = offsetY;
+    const activeVersion = versions.find((version) => version.id === activeVersionId);
+    const stableSeed = emphasis ? activeVersion?.seed : undefined;
+    const placeholderId = crypto.randomUUID();
+    const stillPending = () => versionsRef.current.some((version) => version.id === placeholderId);
+
+    setVersions((current) => [
+      {
+        id: placeholderId,
+        name: `Variante ${current.length + 1}`,
+        image: '',
+        settings: baseSettings,
+        prompt: requestPrompt,
+        seed: stableSeed,
+        note: emphasis?.trim() ?? '',
+        imageAdjustments: baseAdjustments,
+        offsetX: baseOffsetX,
+        offsetY: baseOffsetY,
+        status: 'pending',
+      },
+      ...current,
+    ]);
+    // Sofort auf die neue Variante wechseln: solange sie 'pending' ist, zeigt der Canvas
+    // den Ladescreen. Der Nutzer kann jederzeit auf eine andere Variante zurueckwechseln.
+    setActiveVersionId(placeholderId);
+
+    const requestBody = {
+      prompt: requestPrompt,
+      ...(emphasis ? { emphasis } : {}),
+      density: baseSettings.density,
+      colorStrength: baseSettings.colorStrength,
+      changeStrength: baseSettings.changeStrength,
+      mode: 'initial' as GenerationMode,
+      model: imageModel,
+      ...(typeof stableSeed === 'number' ? { seed: stableSeed } : {}),
+      skipTranslation: !emphasis,
+    };
+
+    try {
+      const response = await fetch('/api/generate-pattern', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      const data = await readJsonResponse(response);
+
+      if (!response.ok || !data.imageUrl) {
+        const fallback = response.ok
+          ? 'Keine Bilddaten erhalten.'
+          : `Der Bildserver ist nicht erreichbar oder antwortete leer (${response.status}).`;
+        throw new Error(data.error || fallback);
+      }
+
+      // Platzhalter koennte zwischenzeitlich entfernt worden sein ("Neue Idee" / verworfen).
+      if (!stillPending()) return;
+
+      let extractedColors = baseSettings.colors;
+      try {
+        extractedColors = await extractDominantPalette(data.imageUrl);
+      } catch {
+        extractedColors = baseSettings.colors;
+      }
+
+      if (!stillPending()) return;
+
+      const nextSettings = { ...baseSettings, colors: extractedColors };
+      const finalPrompt = data.prompt ?? requestPrompt;
+      const finalSeed = typeof data.seed === 'number' ? data.seed : stableSeed;
+
+      setVersions((current) =>
+        current.map((version) =>
+          version.id === placeholderId
+            ? {
+                ...version,
+                image: data.imageUrl,
+                settings: nextSettings,
+                prompt: finalPrompt,
+                seed: finalSeed,
+                status: undefined,
+              }
+            : version,
+        ),
+      );
+
+      // Nur ins Display uebernehmen, wenn der Nutzer noch auf dieser Variante steht
+      // (er koennte zwischenzeitlich auf eine andere Variante gewechselt sein).
+      if (activeVersionIdRef.current === placeholderId) {
+        setSettings(nextSettings);
+        setTileImage(data.imageUrl);
+        setPrompt(finalPrompt);
+        setImageAdjustments(baseAdjustments);
+        setOffsetX(baseOffsetX);
+        setOffsetY(baseOffsetY);
+      }
+    } catch (error) {
+      if (!stillPending()) return;
+      const errorMessage =
+        error instanceof Error ? `Erzeugung nicht möglich: ${error.message}` : 'Erzeugung nicht möglich.';
+      setVersions((current) =>
+        current.map((version) =>
+          version.id === placeholderId ? { ...version, status: 'error', errorMessage } : version,
+        ),
+      );
+    }
+  };
+
   const handleRefinementPrompt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const addition = refinementInput.trim();
-    if (isGenerating) return;
     setRefinementInput('');
-    void generateWithAi('initial', {
-      promptOverride: prompt,
-      ...(addition ? { versionNote: addition } : {}),
-      ...(addition ? { emphasis: addition } : {}),
-    });
+    void generateVariant(addition ? { emphasis: addition } : undefined);
   };
 
   const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1690,7 +1856,9 @@ function App() {
             </div>
           </div>
 
-          {isGenerating && <LoadingOverlay mode={generationMode} imageModel={imageModel} />}
+          {(isGenerating || activeIsPending) && (
+            <LoadingOverlay key={activeVersionId} mode={generationMode} imageModel={imageModel} />
+          )}
         </section>
 
         <aside className="panel versions-panel" aria-label="Varianten">
@@ -1745,6 +1913,53 @@ function App() {
           <div className="versions">
             {versions.length === 0 && <p className="empty-versions">Varianten erscheinen nach dem ersten Muster.</p>}
             {versions.map((version) => {
+              if (version.status === 'pending') {
+                const isActive = activeVersionId === version.id;
+                return (
+                  <div
+                    key={version.id}
+                    className={`version-item-wrapper is-pending${isActive ? ' active-version' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveVersionId(version.id)}
+                      aria-label={`${version.name} ansehen – wird gerade erzeugt`}
+                    >
+                      <MosaicThumb />
+                      <span>
+                        <strong>{version.name}</strong>
+                        <small>Wird erzeugt…</small>
+                      </span>
+                    </button>
+                  </div>
+                );
+              }
+
+              if (version.status === 'error') {
+                return (
+                  <div key={version.id} className="version-item-wrapper is-error">
+                    <div className="version-static">
+                      <span className="version-thumb error" aria-hidden="true">
+                        <TriangleAlert size={20} />
+                      </span>
+                      <span>
+                        <strong>{version.name}</strong>
+                        <small>{version.errorMessage ?? 'Erzeugung fehlgeschlagen.'}</small>
+                      </span>
+                      <button
+                        type="button"
+                        className="version-dismiss"
+                        onClick={() => dismissVersion(version.id)}
+                        aria-label="Fehlgeschlagene Variante entfernen"
+                        title="Entfernen"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
               const isExpanded = expandedVersionId === version.id;
               const isActive = activeVersionId === version.id;
               return (
