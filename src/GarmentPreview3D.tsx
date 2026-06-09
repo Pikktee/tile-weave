@@ -56,9 +56,9 @@ const MATERIAL_SETTINGS = {
     sheen: 0.25,
     sheenRoughness: 0.6,
     sheenColor: '#f5ede0',
-    // weave: fine plain cotton/poplin, clearly visible threads but not overpowering
+    // Kein prozeduraler Weave – Shader-Passes werden via uWeaveWeight > 0.001-Guard übersprungen
     uWeaveScale: 220.0,
-    uWeaveWeight: 0.18,
+    uWeaveWeight: 0.0,
     uWeaveType: 0.0,
     uBleedThrough: 0.18,
   },
