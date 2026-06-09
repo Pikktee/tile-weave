@@ -172,6 +172,8 @@ type SessionSnapshot = {
   viewMode: ViewMode;
   imageModel: ImageModelKey;
   showMannequin?: boolean;
+  materialPreset?: 'standard' | 'linen' | 'silk' | 'sport';
+  lightingPreset?: 'studio' | 'catwalk' | 'sunset';
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -920,6 +922,12 @@ function App() {
     return 'kleid';
   });
   const [showMannequin, setShowMannequin] = useState<boolean>(() => restored?.showMannequin ?? true);
+  const [materialPreset, setMaterialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
+    () => restored?.materialPreset ?? 'standard'
+  );
+  const [lightingPreset, setLightingPreset] = useState<'studio' | 'catwalk' | 'sunset'>(
+    () => restored?.lightingPreset ?? 'studio'
+  );
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
   const [prompt, setPrompt] = useState(() => restored?.prompt ?? '');
   const [versions, setVersions] = useState<Version[]>(() => restored?.versions ?? []);
@@ -1079,6 +1087,8 @@ function App() {
       viewMode,
       imageModel,
       showMannequin,
+      materialPreset,
+      lightingPreset,
     });
   }, [
     tileImage,
@@ -1094,6 +1104,8 @@ function App() {
     viewMode,
     imageModel,
     showMannequin,
+    materialPreset,
+    lightingPreset,
   ]);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
@@ -1964,6 +1976,87 @@ function App() {
               onChange={updateOffsetY}
             />
           </div>
+
+          {viewMode === 'kleidung' && (
+            <div className="refinement-block" style={{ borderTop: '1px solid var(--line)', paddingTop: '16px', marginTop: '12px' }}>
+              <div className="label-row">
+                <span>
+                  <Layers3 size={16} />
+                  3D-Präsentation
+                </span>
+              </div>
+              <div className="control" style={{ gap: '6px' }}>
+                <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
+                  Stoffart
+                </span>
+                <div className="segmented" style={{ width: '100%' }}>
+                  <button
+                    className={materialPreset === 'standard' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setMaterialPreset('standard')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    className={materialPreset === 'silk' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setMaterialPreset('silk')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Seide
+                  </button>
+                  <button
+                    className={materialPreset === 'linen' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setMaterialPreset('linen')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Leinen
+                  </button>
+                  <button
+                    className={materialPreset === 'sport' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setMaterialPreset('sport')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Sport
+                  </button>
+                </div>
+              </div>
+              <div className="control" style={{ gap: '6px' }}>
+                <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
+                  Lichtstimmung
+                </span>
+                <div className="segmented" style={{ width: '100%' }}>
+                  <button
+                    className={lightingPreset === 'studio' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setLightingPreset('studio')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Studio
+                  </button>
+                  <button
+                    className={lightingPreset === 'catwalk' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setLightingPreset('catwalk')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Catwalk
+                  </button>
+                  <button
+                    className={lightingPreset === 'sunset' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setLightingPreset('sunset')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Abend
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </aside>
 
         <section className="preview-stage" aria-live="polite">
@@ -2214,6 +2307,8 @@ function App() {
                   zoom={previewTransform.zoom}
                   onZoomChange={updatePreviewZoom}
                   showMannequin={showMannequin}
+                  materialPreset={materialPreset}
+                  lightingPreset={lightingPreset}
                 />
                 {garmentType === 'custom' && customModelUrl && (
                   <div className="custom-model-actions">

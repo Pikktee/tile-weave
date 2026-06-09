@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Play, Pause } from 'lucide-react';
 
 interface GarmentPreview3DProps {
   modelUrl: string;
@@ -16,6 +17,15 @@ interface GarmentPreview3DProps {
   zoom: number;
   onZoomChange: (zoom: number) => void;
   showMannequin?: boolean;
+  materialPreset: 'standard' | 'linen' | 'silk' | 'sport';
+  lightingPreset: 'studio' | 'catwalk' | 'sunset';
+}
+
+interface CustomShaderUniforms {
+  uWeaveScale: { value: number };
+  uWeaveWeight: { value: number };
+  uBleedThrough: { value: number };
+  uInertia: { value: number };
 }
 
 const applyTextureTransform = (
@@ -34,6 +44,57 @@ const applyTextureTransform = (
   texture.needsUpdate = true;
 };
 
+const MATERIAL_SETTINGS = {
+  standard: {
+    roughness: 0.85,
+    metalness: 0.1,
+    clearcoat: 0.0,
+    clearcoatRoughness: 0.0,
+    sheen: 0.0,
+    sheenRoughness: 0.0,
+    sheenColor: '#ffffff',
+    uWeaveScale: 4000.0,
+    uWeaveWeight: 0.01,
+    uBleedThrough: 0.18,
+  },
+  silk: {
+    roughness: 0.15,
+    metalness: 0.0,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.1,
+    sheen: 0.8,
+    sheenRoughness: 0.2,
+    sheenColor: '#ffe6f0',
+    uWeaveScale: 6000.0,
+    uWeaveWeight: 0.005,
+    uBleedThrough: 0.25,
+  },
+  linen: {
+    roughness: 0.95,
+    metalness: 0.0,
+    clearcoat: 0.0,
+    clearcoatRoughness: 0.0,
+    sheen: 0.0,
+    sheenRoughness: 0.0,
+    sheenColor: '#ffffff',
+    uWeaveScale: 1200.0,
+    uWeaveWeight: 0.035,
+    uBleedThrough: 0.10,
+  },
+  sport: {
+    roughness: 0.5,
+    metalness: 0.1,
+    clearcoat: 0.1,
+    clearcoatRoughness: 0.1,
+    sheen: 0.3,
+    sheenRoughness: 0.2,
+    sheenColor: '#ffffff',
+    uWeaveScale: 3000.0,
+    uWeaveWeight: 0.02,
+    uBleedThrough: 0.15,
+  },
+};
+
 export function GarmentPreview3D({
   modelUrl,
   image,
@@ -47,6 +108,8 @@ export function GarmentPreview3D({
   zoom,
   onZoomChange,
   showMannequin = true,
+  materialPreset,
+  lightingPreset,
 }: GarmentPreview3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -59,8 +122,29 @@ export function GarmentPreview3D({
   const isProgrammaticRef = useRef<boolean>(false);
   const textureTransformRef = useRef({ repeatSize, offsetX, offsetY });
 
+  const [isRotating, setIsRotating] = useState<boolean>(false);
+  const isRotatingRef = useRef<boolean>(false);
+  useEffect(() => {
+    isRotatingRef.current = isRotating;
+  }, [isRotating]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // References to the scene lights to change them dynamically based on lightingPreset
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
+  const dirLight1Ref = useRef<THREE.DirectionalLight | null>(null);
+  const dirLight2Ref = useRef<THREE.DirectionalLight | null>(null);
+
+  // Physics state refs for the inertia fabric swing effect
+  const lastAngleRef = useRef<number>(0);
+  const velocityYRef = useRef<number>(0);
+  const inertiaDisplacementRef = useRef<number>(0);
+  const inertiaVelocityRef = useRef<number>(0);
+  
+  // References to compiled shader uniforms to update values dynamically without recompiling
+  const shaderUniformsRef = useRef<CustomShaderUniforms[]>([]);
+  const lastTimeRef = useRef<number>(0);
 
   // Helper function to apply the texture via the model's UV mapping.
   const applyPatternTexture = useCallback(async () => {
@@ -128,23 +212,6 @@ export function GarmentPreview3D({
                 mat.map = canvasTexture;
                 mat.color.setHex(0xffffff);
                 mat.side = THREE.DoubleSide;
-                mat.onBeforeCompile = (shader) => {
-                  shader.fragmentShader = shader.fragmentShader.replace(
-                    '#include <color_fragment>',
-                    `#include <color_fragment>
-                     #ifdef DOUBLE_SIDED
-                     if ( ! gl_FrontFacing ) {
-                       #ifdef USE_MAP
-                         float weave = sin(vMapUv.x * 4000.0) * sin(vMapUv.y * 4000.0);
-                         vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * 0.02;
-                         diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, 0.18);
-                       #else
-                         diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
-                       #endif
-                     }
-                     #endif`
-                  );
-                };
                 mat.needsUpdate = true;
               }
             }
@@ -159,6 +226,8 @@ export function GarmentPreview3D({
   // 1. Initialize Scene, Camera, Renderer, Lights, and OrbitControls
   useEffect(() => {
     if (!containerRef.current) return;
+
+    lastTimeRef.current = performance.now();
 
     const width = containerRef.current.clientWidth || 400;
     const height = containerRef.current.clientHeight || 400;
@@ -199,10 +268,12 @@ export function GarmentPreview3D({
     // Lights
     const ambientLight = new THREE.AmbientLight('#fffaed', 0.5);
     scene.add(ambientLight);
+    ambientLightRef.current = ambientLight;
 
     const hemiLight = new THREE.HemisphereLight(0xfffdfa, 0x444444, 0.7);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
+    hemiLightRef.current = hemiLight;
 
     const dirLight1 = new THREE.DirectionalLight('#fffdf5', 0.9);
     dirLight1.position.set(5, 10, 7);
@@ -211,10 +282,12 @@ export function GarmentPreview3D({
     dirLight1.shadow.mapSize.height = 2048;
     dirLight1.shadow.bias = -0.001;
     scene.add(dirLight1);
+    dirLight1Ref.current = dirLight1;
 
     const dirLight2 = new THREE.DirectionalLight('#e2f1ff', 0.4);
     dirLight2.position.set(-5, 5, -7);
     scene.add(dirLight2);
+    dirLight2Ref.current = dirLight2;
 
     // Animation Loop
     let animationFrameId: number;
@@ -223,6 +296,13 @@ export function GarmentPreview3D({
       
       const cam = cameraRef.current;
       const ctrl = controlsRef.current;
+      const modelGroup = modelGroupRef.current;
+
+      // Rotate model if autoplay is enabled
+      if (modelGroup && isRotatingRef.current) {
+        modelGroup.rotation.y += 0.005;
+      }
+
       if (cam && ctrl) {
         const targetDistance = targetDistanceRef.current;
         const currentDistance = cam.position.distanceTo(ctrl.target);
@@ -247,6 +327,41 @@ export function GarmentPreview3D({
         }
         
         ctrl.update();
+
+        // Physics calculation for the inertia fabric swing effect
+        const now = performance.now();
+        const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1); // clamp to max 100ms
+        lastTimeRef.current = now;
+
+        const currentAngle = Math.atan2(cam.position.x - ctrl.target.x, cam.position.z - ctrl.target.z) - (modelGroup ? modelGroup.rotation.y : 0);
+        let angleDiff = currentAngle - lastAngleRef.current;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        lastAngleRef.current = currentAngle;
+
+        if (deltaTime > 0.0001) {
+          const targetVelocityY = angleDiff / deltaTime;
+          velocityYRef.current = THREE.MathUtils.lerp(velocityYRef.current, targetVelocityY, 0.1);
+        }
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const k = prefersReducedMotion ? 100.0 : 25.0; // stiffer spring = less displacement
+        const c = prefersReducedMotion ? 10.0 : 3.5;   // higher damping
+        const externalForce = prefersReducedMotion ? 0.0 : -velocityYRef.current * 0.03;
+
+        const force = -k * inertiaDisplacementRef.current - c * inertiaVelocityRef.current + externalForce;
+        inertiaVelocityRef.current += force * deltaTime;
+        inertiaVelocityRef.current = THREE.MathUtils.clamp(inertiaVelocityRef.current, -10, 10);
+        
+        inertiaDisplacementRef.current += inertiaVelocityRef.current * deltaTime;
+        inertiaDisplacementRef.current = THREE.MathUtils.clamp(inertiaDisplacementRef.current, -0.2, 0.2);
+
+        // Update uniforms
+        shaderUniformsRef.current.forEach((uni) => {
+          if (uni.uInertia) {
+            uni.uInertia.value = inertiaDisplacementRef.current;
+          }
+        });
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
@@ -278,13 +393,133 @@ export function GarmentPreview3D({
       if (textureRef.current) {
         textureRef.current.dispose();
       }
+      ambientLightRef.current = null;
+      hemiLightRef.current = null;
+      dirLight1Ref.current = null;
+      dirLight2Ref.current = null;
     };
   }, []);
+
+  // 1.1. Dynamic Lighting Presets Effect
+  useEffect(() => {
+    const ambient = ambientLightRef.current;
+    const hemi = hemiLightRef.current;
+    const dir1 = dirLight1Ref.current;
+    const dir2 = dirLight2Ref.current;
+    if (!ambient || !hemi || !dir1 || !dir2) return;
+
+    if (lightingPreset === 'studio') {
+      ambient.color.set('#fffaed');
+      ambient.intensity = 0.5;
+
+      hemi.color.set('#fffdfa');
+      hemi.groundColor.set('#444444');
+      hemi.intensity = 0.7;
+
+      dir1.color.set('#fffdf5');
+      dir1.intensity = 0.9;
+      dir1.position.set(5, 10, 7);
+
+      dir2.color.set('#e2f1ff');
+      dir2.intensity = 0.4;
+      dir2.position.set(-5, 5, -7);
+    } else if (lightingPreset === 'catwalk') {
+      ambient.color.set('#ffffff');
+      ambient.intensity = 0.1;
+
+      hemi.color.set('#ffffff');
+      hemi.groundColor.set('#111111');
+      hemi.intensity = 0.2;
+
+      dir1.color.set('#ffffff');
+      dir1.intensity = 1.8;
+      dir1.position.set(0, 15, 5);
+
+      dir2.color.set('#ffffff');
+      dir2.intensity = 0.8;
+      dir2.position.set(-4, 4, -8);
+    } else if (lightingPreset === 'sunset') {
+      ambient.color.set('#ffebd1');
+      ambient.intensity = 0.4;
+
+      hemi.color.set('#ffdfc4');
+      hemi.groundColor.set('#2b1b10');
+      hemi.intensity = 0.5;
+
+      dir1.color.set('#ffb066');
+      dir1.intensity = 1.2;
+      dir1.position.set(8, 4, 6);
+
+      dir2.color.set('#99c2ff');
+      dir2.intensity = 0.3;
+      dir2.position.set(-8, 5, -6);
+    }
+  }, [lightingPreset]);
 
   useEffect(() => {
     textureTransformRef.current = { repeatSize, offsetX, offsetY };
     applyTextureTransform(textureRef.current, repeatSize, offsetX, offsetY);
   }, [repeatSize, offsetX, offsetY]);
+
+  // 1.2. Dynamic Material Presets Effect
+  useEffect(() => {
+    const model = modelGroupRef.current;
+    if (!model) return;
+
+    const settings = MATERIAL_SETTINGS[materialPreset];
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((mat) => {
+          if (mat instanceof THREE.MeshPhysicalMaterial) {
+            const name = (mat.name || mesh.name || '').toLowerCase();
+            const isAccessory =
+              name.includes('button') ||
+              name.includes('zipper') ||
+              name.includes('belt') ||
+              name.includes('metal') ||
+              name.includes('buckle') ||
+              name.includes('hardware') ||
+              name.includes('eyelet') ||
+              name.includes('sole') ||
+              name.includes('shoe') ||
+              name.includes('knopf') ||
+              name.includes('reissverschluss') ||
+              name.includes('guertel') ||
+              name.includes('lining') ||
+              name.includes('futter') ||
+              name.includes('inside') ||
+              name.includes('inner') ||
+              name.includes('mannequin') ||
+              name.includes('body');
+
+            if (!isAccessory) {
+              mat.roughness = settings.roughness;
+              mat.metalness = settings.metalness;
+              mat.clearcoat = settings.clearcoat;
+              mat.clearcoatRoughness = settings.clearcoatRoughness;
+              mat.sheen = settings.sheen;
+              mat.sheenRoughness = settings.sheenRoughness;
+              if (mat.sheenColor) {
+                mat.sheenColor.set(settings.sheenColor);
+              } else {
+                mat.sheenColor = new THREE.Color(settings.sheenColor);
+              }
+              mat.needsUpdate = true;
+            }
+          }
+        });
+      }
+    });
+
+    // Update custom uniforms
+    shaderUniformsRef.current.forEach((uni) => {
+      if (uni.uWeaveScale) uni.uWeaveScale.value = settings.uWeaveScale;
+      if (uni.uWeaveWeight) uni.uWeaveWeight.value = settings.uWeaveWeight;
+      if (uni.uBleedThrough) uni.uBleedThrough.value = settings.uBleedThrough;
+    });
+  }, [materialPreset, loading]);
 
   // Keep a ref of applyPatternTexture so the model loading effect doesn't re-trigger on image changes
   const applyPatternTextureRef = useRef(applyPatternTexture);
@@ -313,6 +548,7 @@ export function GarmentPreview3D({
       });
       modelGroupRef.current = null;
     }
+    shaderUniformsRef.current = [];
 
     setLoading(true);
     setError(null);
@@ -391,7 +627,16 @@ export function GarmentPreview3D({
           controlsRef.current.target.set(0, 0, 0);
           cameraRef.current.position.set(0, 0, 2.4);
           controlsRef.current.update();
+
+          lastAngleRef.current = Math.atan2(cameraRef.current.position.x, cameraRef.current.position.z);
+          velocityYRef.current = 0;
+          inertiaVelocityRef.current = 0;
+          inertiaDisplacementRef.current = 0;
+          lastTimeRef.current = performance.now();
         }
+
+        // Clear previous shader uniforms
+        shaderUniformsRef.current = [];
 
         // Enable shadows on children meshes
         model.traverse((child) => {
@@ -407,12 +652,10 @@ export function GarmentPreview3D({
             }
 
             // Adjust material for better texture display
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            materials.forEach((mat) => {
+            const isArray = Array.isArray(mesh.material);
+            const materials = isArray ? (mesh.material as THREE.Material[]) : [mesh.material as THREE.Material];
+            const newMaterials = materials.map((mat) => {
               if (mat instanceof THREE.MeshStandardMaterial) {
-                mat.roughness = 0.85; // Fabric is rough
-                mat.metalness = 0.1;  // Fabric is non-metallic
-
                 const name = (mat.name || mesh.name || '').toLowerCase();
                 const isAccessory =
                   name.includes('button') ||
@@ -435,27 +678,82 @@ export function GarmentPreview3D({
                   name.includes('body');
 
                 if (!isAccessory) {
-                  mat.side = THREE.DoubleSide;
-                  mat.onBeforeCompile = (shader) => {
+                  // Convert MeshStandardMaterial to MeshPhysicalMaterial
+                  const physicalMat = new THREE.MeshPhysicalMaterial();
+                  physicalMat.copy(mat);
+
+                  physicalMat.roughness = 0.85; // Fabric is rough
+                  physicalMat.metalness = 0.1;  // Fabric is non-metallic
+                  physicalMat.side = THREE.DoubleSide;
+
+                  // Setup custom uniforms for this material instance
+                  const customUniforms = {
+                    uWeaveScale: { value: 4000.0 },
+                    uWeaveWeight: { value: 0.01 },
+                    uBleedThrough: { value: 0.18 },
+                    uInertia: { value: 0.0 }
+                  };
+                  shaderUniformsRef.current.push(customUniforms);
+
+                  physicalMat.onBeforeCompile = (shader) => {
+                    // Inject uniforms
+                    shader.uniforms.uWeaveScale = customUniforms.uWeaveScale;
+                    shader.uniforms.uWeaveWeight = customUniforms.uWeaveWeight;
+                    shader.uniforms.uBleedThrough = customUniforms.uBleedThrough;
+                    shader.uniforms.uInertia = customUniforms.uInertia;
+
+                    // Add uniforms declarations at the top of fragment shader
+                    shader.fragmentShader = `
+                      uniform float uWeaveScale;
+                      uniform float uWeaveWeight;
+                      uniform float uBleedThrough;
+                    ` + shader.fragmentShader;
+
+                    // Replace lining / color_fragment
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <color_fragment>',
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
                        if ( ! gl_FrontFacing ) {
                          #ifdef USE_MAP
-                           float weave = sin(vMapUv.x * 4000.0) * sin(vMapUv.y * 4000.0);
-                           vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * 0.02;
-                           diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, 0.18);
+                           float weave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                           vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * uWeaveWeight;
+                           diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, uBleedThrough);
                          #else
                            diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
                          #endif
                        }
                        #endif`
                     );
+
+                    // Add uniforms declarations at the top of vertex shader
+                    shader.vertexShader = `
+                      uniform float uInertia;
+                    ` + shader.vertexShader;
+
+                    // Replace begin_vertex
+                    shader.vertexShader = shader.vertexShader.replace(
+                      '#include <begin_vertex>',
+                      `#include <begin_vertex>
+                       float heightFactor = clamp((0.8 - position.y) / 1.6, 0.0, 1.0);
+                       float flex = heightFactor * heightFactor;
+                       transformed.x += -position.z * uInertia * flex;
+                       transformed.z += position.x * uInertia * flex;
+                      `
+                    );
                   };
+
+                  return physicalMat;
                 }
               }
+              return mat;
             });
+
+            if (isArray) {
+              mesh.material = newMaterials;
+            } else {
+              mesh.material = newMaterials[0];
+            }
           }
         });
 
@@ -620,6 +918,20 @@ export function GarmentPreview3D({
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* 3D Canvas Container */}
       <div ref={containerRef} style={{ width: '100%', height: '100%', outline: 'none' }} />
+
+      {/* Autoplay Button */}
+      <button
+        className="garment-3d-autoplay-btn"
+        onClick={() => setIsRotating((prev) => !prev)}
+        title={isRotating ? 'Drehung anhalten' : 'Automatische Drehung starten'}
+        aria-label={isRotating ? 'Drehung anhalten' : 'Automatische Drehung starten'}
+      >
+        {isRotating ? (
+          <Pause size={18} strokeWidth={2.5} />
+        ) : (
+          <Play size={18} strokeWidth={2.5} style={{ marginLeft: '2px' }} />
+        )}
+      </button>
 
       {/* Loading Overlay */}
       {loading && (

@@ -2747,3 +2747,44 @@ input:focus-visible + .slider-toggle {
 input:checked + .slider-toggle:before {
   transform: translateX(18px);
 }
+
+/* 3D View Autoplay Button overlay */
+.garment-3d-autoplay-btn {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(43, 33, 30, 0.15);
+  background: rgba(255, 252, 246, 0.76);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(43, 33, 30, 0.1);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 120ms ease;
+  z-index: 10;
+}
+
+.garment-3d-autoplay-btn:hover {
+  background: rgba(255, 252, 246, 0.95);
+  border-color: rgba(33, 168, 163, 0.40);
+  color: var(--teal);
+  transform: scale(1.05);
+}
+
+.garment-3d-autoplay-btn:active {
+  transform: scale(0.95);
+}
+
+.garment-3d-autoplay-btn svg {
+  transition: transform 180ms ease;
+}
