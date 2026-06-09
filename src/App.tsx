@@ -173,7 +173,7 @@ type SessionSnapshot = {
   imageModel: ImageModelKey;
   showMannequin?: boolean;
   materialPreset?: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset?: 'studio' | 'showroom' | 'sunset';
+  lightingPreset?: 'studio' | 'showroom' | 'sunset' | 'neon';
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -925,7 +925,7 @@ function App() {
   const [materialPreset, setMaterialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
     () => restored?.materialPreset ?? 'standard'
   );
-  const [lightingPreset, setLightingPreset] = useState<'studio' | 'showroom' | 'sunset'>(
+  const [lightingPreset, setLightingPreset] = useState<'studio' | 'showroom' | 'sunset' | 'neon'>(
     () => restored?.lightingPreset ?? 'studio'
   );
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
@@ -2052,6 +2052,14 @@ function App() {
                     style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
                   >
                     Abend
+                  </button>
+                  <button
+                    className={lightingPreset === 'neon' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setLightingPreset('neon')}
+                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
+                  >
+                    Neon
                   </button>
                 </div>
               </div>

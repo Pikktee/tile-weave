@@ -18,7 +18,7 @@ interface GarmentPreview3DProps {
   onZoomChange: (zoom: number) => void;
   showMannequin?: boolean;
   materialPreset: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset: 'studio' | 'showroom' | 'sunset';
+  lightingPreset: 'studio' | 'showroom' | 'sunset' | 'neon';
 }
 
 interface CustomShaderUniforms {
@@ -48,63 +48,65 @@ const applyTextureTransform = (
 
 const MATERIAL_SETTINGS = {
   standard: {
-    roughness: 0.80,
-    metalness: 0.05,
+    roughness: 0.70,
+    metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 0.2,
+    sheen: 0.15,
     sheenRoughness: 0.5,
     sheenColor: '#ffffff',
-    uWeaveScale: 4000.0,
-    uWeaveWeight: 0.015,
+    uWeaveScale: 400.0,
+    uWeaveWeight: 0.08,
     uBleedThrough: 0.18,
   },
   silk: {
-    roughness: 0.18,
-    metalness: 0.08,
-    clearcoat: 0.6,
+    roughness: 0.28, // smooth satin, has a nice spread highlight but not mirror plastic
+    metalness: 0.0,
+    clearcoat: 0.05, // very subtle gloss lacquer
     clearcoatRoughness: 0.08,
-    sheen: 1.0,
-    sheenRoughness: 0.15,
-    sheenColor: '#ffd9e6', // beautiful warm pink sheen
-    uWeaveScale: 6000.0,
-    uWeaveWeight: 0.005, // very fine
+    sheen: 1.0, // full velvet sheen
+    sheenRoughness: 0.25,
+    sheenColor: '#ffeef5', // beautiful warm pink sheen
+    uWeaveScale: 1200.0, // extremely fine
+    uWeaveWeight: 0.02,
     uBleedThrough: 0.25,
   },
   linen: {
-    roughness: 0.98, // very dry and matte
+    roughness: 0.95, // completely dry and matte
     metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
     sheen: 0.0,
     sheenRoughness: 0.0,
     sheenColor: '#ffffff',
-    uWeaveScale: 800.0, // very coarse, visible weave threads
-    uWeaveWeight: 0.07, // very pronounced gaps
+    uWeaveScale: 150.0, // coarse weave, clearly visible
+    uWeaveWeight: 0.22, // strong faden-depth shadows
     uBleedThrough: 0.08,
   },
   sport: {
-    roughness: 0.45,
-    metalness: 0.02,
-    clearcoat: 0.15,
-    clearcoatRoughness: 0.2,
-    sheen: 0.5,
+    roughness: 0.50,
+    metalness: 0.0,
+    clearcoat: 0.0,
+    clearcoatRoughness: 0.0,
+    sheen: 0.4, // synthetic fiber sheen
     sheenRoughness: 0.3,
     sheenColor: '#ffffff',
-    uWeaveScale: 2500.0, // honeycomb texture
-    uWeaveWeight: 0.04, // visible knit holes
+    uWeaveScale: 280.0, // technical mesh grid
+    uWeaveWeight: 0.14, // visible honeycomb holes
     uBleedThrough: 0.15,
   },
 };
 
-const getBackgroundStyle = (preset: 'studio' | 'showroom' | 'sunset') => {
+const getBackgroundStyle = (preset: 'studio' | 'showroom' | 'sunset' | 'neon') => {
   switch (preset) {
     case 'studio':
-      return 'linear-gradient(180deg, #f7f3eb 0%, #e8e2d5 100%)';
+      return 'linear-gradient(180deg, rgba(247, 243, 235, 0.45) 0%, rgba(232, 226, 213, 0.75) 100%)';
     case 'showroom':
-      return 'linear-gradient(180deg, #e4ded3 0%, #c8bfb0 100%)';
+      return 'linear-gradient(180deg, rgba(228, 222, 211, 0.5) 0%, rgba(200, 191, 176, 0.8) 100%)';
     case 'sunset':
-      return 'linear-gradient(180deg, #fce0c7 0%, #f3a683 40%, #574b90 100%)';
+      return 'linear-gradient(180deg, rgba(252, 224, 199, 0.5) 0%, rgba(243, 166, 131, 0.7) 40%, rgba(87, 75, 144, 0.8) 100%)';
+    case 'neon':
+      return 'linear-gradient(180deg, rgba(30, 20, 50, 0.6) 0%, rgba(15, 10, 30, 0.85) 100%)';
   }
 };
 
@@ -466,6 +468,21 @@ export function GarmentPreview3D({
       dir2.color.set('#7080a0');
       dir2.intensity = 0.5;
       dir2.position.set(-8, 5, -6);
+    } else if (lightingPreset === 'neon') {
+      ambient.color.set('#15102a');
+      ambient.intensity = 0.3;
+
+      hemi.color.set('#00ffff');
+      hemi.groundColor.set('#ff00ff');
+      hemi.intensity = 0.2;
+
+      dir1.color.set('#00f0ff');
+      dir1.intensity = 1.5;
+      dir1.position.set(5, 5, 6);
+
+      dir2.color.set('#ff00d0');
+      dir2.intensity = 1.2;
+      dir2.position.set(-5, 3, -6);
     }
   }, [lightingPreset]);
 
@@ -964,7 +981,7 @@ export function GarmentPreview3D({
         height: '100%',
         background: getBackgroundStyle(lightingPreset),
         transition: 'background 500ms ease',
-        borderRadius: '24px',
+        borderRadius: '0 0 24px 24px',
         overflow: 'hidden'
       }}
     >
