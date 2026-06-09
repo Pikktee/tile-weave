@@ -2163,7 +2163,7 @@ function App() {
                     onKeyDown={handleGarmentDropdownKeyDown}
                   >
                     <span className="garment-select-picker__label">
-                      Garderobe
+                      Kleidungsstück
                     </span>
                     <button
                       className="garment-dropdown__trigger"
