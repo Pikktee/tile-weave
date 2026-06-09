@@ -883,27 +883,34 @@ export function GarmentPreview3D({
                        }`
                     );
 
-                    // Replace normal_fragment_begin: adaptive bump mapping.
+                    // ── Bump-Pass: Normal-Perturbation ─────────────────────────────────────────
+                    // tw_h / tw_fade werden in main() deklariert, damit color_fragment und
+                    // roughnessmap_fragment sie ohne weiteren getFabricHeight-Aufruf nutzen
+                    // können (spart 2 von 5 Calls = 40 % weniger Berechnungen pro Pixel).
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <normal_fragment_begin>',
                       `#include <normal_fragment_begin>
+                       // Shared weave state: computed once, reused in color + roughness passes
+                       float tw_h    = 0.0;
+                       float tw_fade = 0.0;
                        #ifdef USE_MAP
-                       if ( gl_FrontFacing && uWeaveWeight > 0.001 ) {
+                       if (uWeaveWeight > 0.001) {
                          vec2 fw = fwidth(vMapUv);
                          float pixelUV = max(fw.x, fw.y);
                          float nyquistFade = 1.0 - smoothstep(0.3, 0.7, pixelUV * uWeaveScale);
-                         float distFade = 1.0 - smoothstep(1.5, 3.0, length(vViewPosition));
-                         float fade = nyquistFade * distFade;
-
-                         if (fade > 0.01) {
+                         float distFade   = 1.0 - smoothstep(1.5, 3.0, length(vViewPosition));
+                         tw_fade = nyquistFade * distFade;
+                         // Center sample: always needed (back-face lining + bump center)
+                         tw_h = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType);
+                         if (gl_FrontFacing && tw_fade > 0.01) {
                            float stepSize = clamp(pixelUV, 0.4 / uWeaveScale, 1.5 / uWeaveScale);
-                           float h    = getFabricHeight(vMapUv,                      uWeaveScale, uWeaveWeight, uWeaveType);
                            float h_dx = getFabricHeight(vMapUv + vec2(stepSize, 0.0), uWeaveScale, uWeaveWeight, uWeaveType);
                            float h_dy = getFabricHeight(vMapUv + vec2(0.0, stepSize), uWeaveScale, uWeaveWeight, uWeaveType);
-                           float derivX = (h_dx - h) * uWeaveWeight * 15.0 * fade;
-                           float derivY = (h_dy - h) * uWeaveWeight * 15.0 * fade;
-                           vec3 helper = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-                           vec3 tangent = normalize(cross(normal, helper));
+                           float bumpStr = uWeaveWeight * 15.0 * tw_fade;
+                           float derivX  = (h_dx - tw_h) * bumpStr;
+                           float derivY  = (h_dy - tw_h) * bumpStr;
+                           vec3 helper    = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+                           vec3 tangent   = normalize(cross(normal, helper));
                            vec3 bitangent = normalize(cross(normal, tangent));
                            normal = normalize(normal + (tangent * derivX + bitangent * derivY) * 0.25);
                          }
@@ -911,50 +918,48 @@ export function GarmentPreview3D({
                        #endif`
                     );
 
-                    // Replace lining / color_fragment & add front-face weave color shading.
+                    // ── Farb-Pass: Futter-Rückseite + Weave-Schattierung ───────────────────────
+                    // Nutzt tw_h / tw_fade aus dem Bump-Pass – kein eigener getFabricHeight-Aufruf.
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <color_fragment>',
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
-                       #ifdef USE_MAP
                        if (uWeaveWeight > 0.001) {
-                         vec2 fw2 = fwidth(vMapUv);
-                         float pixelUV2 = max(fw2.x, fw2.y);
-                         float nyquistFade2 = 1.0 - smoothstep(0.3, 0.7, pixelUV2 * uWeaveScale);
-                         float distFade2 = 1.0 - smoothstep(1.5, 3.0, length(vViewPosition));
-                         float fade2 = nyquistFade2 * distFade2;
-                         float weave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade2;
-                         if ( ! gl_FrontFacing ) {
-                           vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * uWeaveWeight;
+                         #ifdef USE_MAP
+                         float weave = tw_h * tw_fade;
+                         if (!gl_FrontFacing) {
+                           // Innenfutter: warmes Off-White, leicht gewebt
+                           vec3 liningBase = vec3(0.95, 0.94, 0.92) + weave * 0.5 * uWeaveWeight;
                            diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, uBleedThrough);
-                         } else {
-                           diffuseColor.rgb *= (1.0 - uWeaveWeight * 0.4) + (weave * 0.5) * uWeaveWeight * 0.8;
+                         } else if (tw_fade > 0.0) {
+                           // Außenseite: subtile Weave-Schatten/Highlights
+                           diffuseColor.rgb *= (1.0 - uWeaveWeight * 0.4) + weave * 0.5 * uWeaveWeight * 0.8;
                          }
-                       } else if ( ! gl_FrontFacing ) {
-                         diffuseColor.rgb = mix(vec3(0.95, 0.94, 0.92), diffuseColor.rgb, uBleedThrough);
-                       }
-                       #else
-                         if ( ! gl_FrontFacing ) {
+                         #else
+                         if (!gl_FrontFacing) {
                            diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
                          }
-                       #endif
+                         #endif
+                       } else if (!gl_FrontFacing) {
+                         // Kein Weave (standard/silk), trotzdem Futter-Farbe
+                         #ifdef USE_MAP
+                         diffuseColor.rgb = mix(vec3(0.95, 0.94, 0.92), diffuseColor.rgb, uBleedThrough);
+                         #else
+                         diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
+                         #endif
+                       }
                        #endif`
                     );
 
-                    // Inject roughness modulation
+                    // ── Roughness-Pass: Fadenkuppen etwas glatter ──────────────────────────────
+                    // Nutzt tw_h / tw_fade aus dem Bump-Pass – kein eigener getFabricHeight-Aufruf.
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <roughnessmap_fragment>',
                       `#include <roughnessmap_fragment>
-                       #ifdef USE_MAP
-                       if (uWeaveWeight > 0.001) {
-                         vec2 fw3 = fwidth(vMapUv);
-                         float pUV3 = max(fw3.x, fw3.y);
-                         float fade3 = (1.0 - smoothstep(0.3, 0.7, pUV3 * uWeaveScale))
-                                     * (1.0 - smoothstep(1.5, 3.0, length(vViewPosition)));
-                         float microWeave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade3;
+                       if (uWeaveWeight > 0.001 && tw_fade > 0.0) {
+                         float microWeave = tw_h * tw_fade;
                          roughnessFactor = clamp(roughnessFactor + microWeave * uWeaveWeight * 2.0, 0.05, 1.0);
-                       }
-                       #endif`
+                       }`
                     );
 
                     // Add uniforms declarations inside vertex shader by replacing '#include <common>'
