@@ -49,56 +49,60 @@ const applyTextureTransform = (
 
 const MATERIAL_SETTINGS = {
   standard: {
-    roughness: 0.70,
+    roughness: 0.80,
     metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 0.15,
-    sheenRoughness: 0.5,
-    sheenColor: '#ffffff',
-    uWeaveScale: 400.0,
-    uWeaveWeight: 0.0, // Standard-Stoffart hat keinen Web-Effekt
-    uWeaveType: 0.0, // Plain Weave Standard
+    sheen: 0.25,
+    sheenRoughness: 0.6,
+    sheenColor: '#f5ede0',
+    // weave: fine plain cotton/poplin, clearly visible threads but not overpowering
+    uWeaveScale: 220.0,
+    uWeaveWeight: 0.18,
+    uWeaveType: 0.0,
     uBleedThrough: 0.18,
   },
   silk: {
-    roughness: 0.35, // smooth satin, has a nice spread highlight but not mirror plastic
+    roughness: 0.20,  // very smooth – light spreads wide
     metalness: 0.0,
-    clearcoat: 0.0, // remove clearcoat to prevent plastic look
+    clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 1.0, // full silk/satin sheen
-    sheenRoughness: 0.2, // soft satin spread
+    sheen: 1.0,       // full satin sheen
+    sheenRoughness: 0.12, // tight highlight lobe
     sheenColor: '#ffffff',
-    uWeaveScale: 800.0, // fine weave
-    uWeaveWeight: 0.02,
-    uWeaveType: 0.0, // Plain Weave Fine
-    uBleedThrough: 0.25,
+    // weave: ultra-fine twill, barely visible, mostly sheen-driven
+    uWeaveScale: 600.0,
+    uWeaveWeight: 0.06,
+    uWeaveType: 0.0,
+    uBleedThrough: 0.30,
   },
   linen: {
-    roughness: 0.95, // completely dry and matte
+    roughness: 0.96, // bone-dry matte
     metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 0.0,
-    sheenRoughness: 0.0,
-    sheenColor: '#ffffff',
-    uWeaveScale: 150.0, // coarse weave, clearly visible
-    uWeaveWeight: 0.22, // strong faden-depth shadows
-    uWeaveType: 1.0, // Linen weave type with irregularities
-    uBleedThrough: 0.08,
+    sheen: 0.05,
+    sheenRoughness: 0.9,
+    sheenColor: '#e8dcc8',
+    // weave: thick natural yarns with irregularities
+    uWeaveScale: 110.0,
+    uWeaveWeight: 0.38,
+    uWeaveType: 1.0,
+    uBleedThrough: 0.06,
   },
   sport: {
-    roughness: 0.50,
+    roughness: 0.45,
     metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 0.4, // synthetic fiber sheen
-    sheenRoughness: 0.3,
-    sheenColor: '#ffffff',
-    uWeaveScale: 280.0, // technical mesh grid
-    uWeaveWeight: 0.14, // visible honeycomb holes
-    uWeaveType: 2.0, // Sport mesh type
-    uBleedThrough: 0.15,
+    sheen: 0.55,  // synthetic micro-fiber sheen
+    sheenRoughness: 0.25,
+    sheenColor: '#d0e8ff',
+    // weave: technical mesh, visible hexagonal apertures
+    uWeaveScale: 180.0,
+    uWeaveWeight: 0.28,
+    uWeaveType: 2.0,
+    uBleedThrough: 0.12,
   },
 };
 
@@ -458,74 +462,77 @@ export function GarmentPreview3D({
 
       spot.intensity = 0.0;
     } else if (lightingPreset === 'showroom') {
+      // Boutique-Schaufenster: enger Overhead-Spot + starkes Gegenlicht für Silhouette
       ambient.color.set('#ffe8cc');
-      ambient.intensity = 0.25;
-
-      hemi.color.set('#ffffff');
-      hemi.groundColor.set('#332211');
-      hemi.intensity = 0.3;
-
-      dir1.color.set('#ffeedd');
-      dir1.intensity = 0.4; // Soft fill light from front-left
-      dir1.position.set(-4, 3, 5);
-
-      dir2.color.set('#ffffff');
-      dir2.intensity = 1.2; // Strong rim light to highlight shoulders and silhouette
-      dir2.position.set(0, 5, -8);
-
-      spot.color.set('#ffffff');
-      spot.intensity = 7.0; // Highly focused theatrical gallery spotlight
-      spot.position.set(0, 7, 2);
-      spot.distance = 15.0;
-      spot.angle = Math.PI / 6; // Narrow beam
-      spot.penumbra = 0.8;      // Smooth borders
-      spot.decay = 1.2;         // Realistic light falloff
-    } else if (lightingPreset === 'sunset') {
-      ambient.color.set('#ffe0c0');
       ambient.intensity = 0.15;
 
-      hemi.color.set('#ffc899');
-      hemi.groundColor.set('#20150d');
+      hemi.color.set('#fff0e0');
+      hemi.groundColor.set('#221100');
       hemi.intensity = 0.2;
 
-      dir1.color.set('#ff7315');
-      dir1.intensity = 2.5; // Low-angle intense golden sunset sun
-      dir1.position.set(10, 2.0, 4);
+      dir1.color.set('#ffe8c8');  // warmes Füll-Licht von vorne links
+      dir1.intensity = 0.35;
+      dir1.position.set(-3, 4, 6);
 
-      dir2.color.set('#4b6584');
-      dir2.intensity = 0.8; // Cool blue/indigo sky fill from shadow side
-      dir2.position.set(-10, 4, 3);
+      dir2.color.set('#e8f4ff');  // kühles, starkes Gegenlicht für Schulter-Silhouette
+      dir2.intensity = 1.5;
+      dir2.position.set(1, 6, -8);
 
-      spot.color.set('#ffa502'); // Golden rim spotlight highlighting edges
-      spot.intensity = 6.0;
-      spot.position.set(-5, 4, -8);
-      spot.distance = 15.0;
-      spot.angle = Math.PI / 4;
+      spot.color.set('#fff8f0');  // enger Bühnenstrahler von oben
+      spot.intensity = 9.0;
+      spot.position.set(0, 8, 2);
+      spot.distance = 16.0;
+      spot.angle = Math.PI / 7;  // sehr enger Strahl
+      spot.penumbra = 0.9;       // weiches Randlicht
+      spot.decay = 1.5;
+    } else if (lightingPreset === 'sunset') {
+      // Goldene Stunde: tief stehende Sonne von der Seite, kühle Schatten
+      ambient.color.set('#ffcca0');
+      ambient.intensity = 0.12;
+
+      hemi.color.set('#ff9a5c');
+      hemi.groundColor.set('#180e08');
+      hemi.intensity = 0.15;
+
+      dir1.color.set('#ff7a20');  // intensiver flacher Sonnenstrahl
+      dir1.intensity = 3.0;
+      dir1.position.set(9, 1.5, 4);
+
+      dir2.color.set('#3a5c8a');  // kühles blaues Abendhimmel-Füllicht
+      dir2.intensity = 0.85;
+      dir2.position.set(-9, 5, 2);
+
+      spot.color.set('#ffb040');  // goldenes Gegenlicht von hinten unten
+      spot.intensity = 7.0;
+      spot.position.set(-4, 3, -9);
+      spot.distance = 17.0;
+      spot.angle = Math.PI / 3.5;
       spot.penumbra = 0.7;
-      spot.decay = 1.0;
+      spot.decay = 1.2;
     } else if (lightingPreset === 'neon') {
-      ambient.color.set('#0a0518');
-      ambient.intensity = 0.2;
+      // Club-Bühne: dunkle Basis, drei bunte Lichter
+      ambient.color.set('#080312');
+      ambient.intensity = 0.1;
 
-      hemi.color.set('#00ffff');
-      hemi.groundColor.set('#ff00ff');
-      hemi.intensity = 0.1;
+      hemi.color.set('#001133');
+      hemi.groundColor.set('#220011');
+      hemi.intensity = 0.05;
 
-      dir1.color.set('#00f0ff');
-      dir1.intensity = 1.4; // Toned down cyan key light
-      dir1.position.set(5, 4, 5);
+      dir1.color.set('#00e0ff');  // kräftiger Cyan-Key von rechts vorne
+      dir1.intensity = 2.0;
+      dir1.position.set(5, 5, 4);
 
-      dir2.color.set('#ff00bb');
-      dir2.intensity = 1.0; // Toned down magenta fill light
-      dir2.position.set(-5, 3, 5);
+      dir2.color.set('#ff00cc');  // Magenta-Fill von links
+      dir2.intensity = 1.6;
+      dir2.position.set(-5, 3, 4);
 
-      spot.color.set('#ff00ff'); // Hot magenta rim light from behind
-      spot.intensity = 3.5; // Toned down spotlight
-      spot.position.set(0, 5, -7);
-      spot.distance = 15.0;
-      spot.angle = Math.PI / 3;
+      spot.color.set('#9900ff');  // violetter Rim-Strahler von hinten
+      spot.intensity = 5.5;
+      spot.position.set(0, 5, -8);
+      spot.distance = 17.0;
+      spot.angle = Math.PI / 2.8;
       spot.penumbra = 0.6;
-      spot.decay = 1.0;
+      spot.decay = 1.4;
     }
   }, [lightingPreset]);
 
@@ -794,7 +801,10 @@ export function GarmentPreview3D({
                     shader.uniforms.uMinY = customUniforms.uMinY;
                     shader.uniforms.uMaxY = customUniforms.uMaxY;
 
-                    // Inject uniforms and functions into fragment shader
+                    // Inject uniforms and helper functions into fragment shader.
+                    // getFabricHeight uses aaSmoothstep (fwidth-based) for anti-aliased thread
+                    // profiles. The Nyquist-fade in the bump/color/roughness passes below
+                    // ensures the whole effect disappears before aliasing can occur at zoom-out.
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <common>',
                       `#include <common>
@@ -803,78 +813,125 @@ export function GarmentPreview3D({
                        uniform float uWeaveType;
                        uniform float uBleedThrough;
 
+                       // Value noise for linen yarn irregularity
+                       float hash12(vec2 p) {
+                         vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+                         p3 += dot(p3, p3.yzx + 33.33);
+                         return fract((p3.x + p3.y) * p3.z);
+                       }
+                       float vnoise(vec2 p) {
+                         vec2 i = floor(p);
+                         vec2 f = fract(p);
+                         vec2 u = f * f * (3.0 - 2.0 * f);
+                         return mix(
+                           mix(hash12(i),                 hash12(i + vec2(1.0, 0.0)), u.x),
+                           mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x),
+                           u.y
+                         );
+                       }
+
+                       // Anti-aliased band using fwidth so thread edges don't alias
+                       float aaSmoothstep(float val, float edge0, float edge1) {
+                         float fw = fwidth(val) * 0.5;
+                         return smoothstep(edge0 - fw, edge1 + fw, val);
+                       }
+
                        float getFabricHeight(vec2 uv, float scale, float weight, float type) {
                          vec2 p = uv * scale;
-                         if (type > 1.5) { // Sport
-                           vec2 f = fract(p) - 0.5;
+                         if (type > 1.5) {
+                           // ── Sport: hexagonal mesh apertures ──────────────────────────
+                           vec2 hex = p;
+                           hex.x += step(1.0, mod(floor(hex.y), 2.0)) * 0.5;
+                           vec2 f = fract(hex) - 0.5;
                            float d = length(f);
-                           return (1.0 - smoothstep(0.15, 0.45, d)) * 2.0 - 1.0;
-                         } else if (type > 0.5) { // Linen
-                           float irregularity = sin(uv.x * 25.0) * sin(uv.y * 33.0) * 0.2 + 1.0;
-                           vec2 pIrreg = p * vec2(irregularity, 1.0 / irregularity);
-                           vec2 i = floor(pIrreg);
-                           vec2 f = fract(pIrreg);
-                           bool isWarp = mod(i.x + i.y, 2.0) < 0.5;
-                           if (isWarp) {
-                             return sin(f.x * 3.14159) * (0.4 + 0.6 * sin(f.y * 3.14159));
-                           } else {
-                             return sin(f.y * 3.14159) * (0.4 + 0.6 * sin(f.x * 3.14159));
-                           }
-                         } else { // Standard / Silk
-                           vec2 i = floor(p);
+                           float fw = fwidth(d) * 1.5;
+                           float ring = 1.0 - smoothstep(0.28 - fw, 0.28 + fw, d);
+                           return ring * 2.0 - 1.0;
+                         } else if (type > 0.5) {
+                           // ── Linen: irregular plain weave with thick yarn ───────────
+                           float noiseU = vnoise(vec2(floor(p.x), uv.y * 3.7)) * 0.3 + 0.85;
+                           float noiseV = vnoise(vec2(uv.x * 3.7, floor(p.y))) * 0.3 + 0.85;
+                           vec2 cell = floor(p);
+                           bool isWarp = mod(cell.x + cell.y, 2.0) < 0.5;
                            vec2 f = fract(p);
-                           bool isWarp = mod(i.x + i.y, 2.0) < 0.5;
+                           float profile;
                            if (isWarp) {
-                             return sin(f.x * 3.14159) * (0.5 + 0.5 * sin(f.y * 3.14159));
+                             float edgeW = noiseV * 0.22;
+                             float threadProfile = aaSmoothstep(f.y, edgeW, 0.5) - aaSmoothstep(f.y, 0.5, 1.0 - edgeW);
+                             profile = threadProfile * (0.5 + 0.5 * aaSmoothstep(f.x, 0.1, 0.9));
                            } else {
-                             return sin(f.y * 3.14159) * (0.5 + 0.5 * sin(f.x * 3.14159));
+                             float edgeW = noiseU * 0.22;
+                             float threadProfile = aaSmoothstep(f.x, edgeW, 0.5) - aaSmoothstep(f.x, 0.5, 1.0 - edgeW);
+                             profile = threadProfile * (0.5 + 0.5 * aaSmoothstep(f.y, 0.1, 0.9));
                            }
+                           return profile * 2.0 - 1.0;
+                         } else {
+                           // ── Standard / Silk: clean plain weave ───────────────────────
+                           vec2 cell = floor(p);
+                           bool isWarp = mod(cell.x + cell.y, 2.0) < 0.5;
+                           vec2 f = fract(p);
+                           float profile;
+                           if (isWarp) {
+                             float threadProfile = aaSmoothstep(f.y, 0.15, 0.5) - aaSmoothstep(f.y, 0.5, 0.85);
+                             profile = threadProfile * (0.5 + 0.5 * sin(f.x * 3.14159));
+                           } else {
+                             float threadProfile = aaSmoothstep(f.x, 0.15, 0.5) - aaSmoothstep(f.x, 0.5, 0.85);
+                             profile = threadProfile * (0.5 + 0.5 * sin(f.y * 3.14159));
+                           }
+                           return profile * 2.0 - 1.0;
                          }
                        }`
                     );
 
-                    // Replace normal_fragment_begin to inject procedural weave bump mapping
+                    // Replace normal_fragment_begin: adaptive bump mapping.
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <normal_fragment_begin>',
                       `#include <normal_fragment_begin>
                        #ifdef USE_MAP
-                       if ( gl_FrontFacing ) {
-                         float dist = length(vViewPosition);
-                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
+                       if ( gl_FrontFacing && uWeaveWeight > 0.001 ) {
+                         vec2 fw = fwidth(vMapUv);
+                         float pixelUV = max(fw.x, fw.y);
+                         float nyquistFade = 1.0 - smoothstep(0.3, 0.7, pixelUV * uWeaveScale);
+                         float distFade = 1.0 - smoothstep(1.5, 3.0, length(vViewPosition));
+                         float fade = nyquistFade * distFade;
 
-                         float stepSize = 0.5 / uWeaveScale;
-                         float h = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType);
-                         float h_dx = getFabricHeight(vMapUv + vec2(stepSize, 0.0), uWeaveScale, uWeaveWeight, uWeaveType);
-                         float h_dy = getFabricHeight(vMapUv + vec2(0.0, stepSize), uWeaveScale, uWeaveWeight, uWeaveType);
-                         float derivX = (h_dx - h) * uWeaveWeight * 15.0 * fade;
-                         float derivY = (h_dy - h) * uWeaveWeight * 15.0 * fade;
-                         vec3 helper = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-                         vec3 tangent = normalize(cross(normal, helper));
-                         vec3 bitangent = normalize(cross(normal, tangent));
-                         // Perturb the surface normal
-                         normal = normalize(normal + (tangent * derivX + bitangent * derivY) * 0.25);
+                         if (fade > 0.01) {
+                           float stepSize = clamp(pixelUV, 0.4 / uWeaveScale, 1.5 / uWeaveScale);
+                           float h    = getFabricHeight(vMapUv,                      uWeaveScale, uWeaveWeight, uWeaveType);
+                           float h_dx = getFabricHeight(vMapUv + vec2(stepSize, 0.0), uWeaveScale, uWeaveWeight, uWeaveType);
+                           float h_dy = getFabricHeight(vMapUv + vec2(0.0, stepSize), uWeaveScale, uWeaveWeight, uWeaveType);
+                           float derivX = (h_dx - h) * uWeaveWeight * 15.0 * fade;
+                           float derivY = (h_dy - h) * uWeaveWeight * 15.0 * fade;
+                           vec3 helper = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+                           vec3 tangent = normalize(cross(normal, helper));
+                           vec3 bitangent = normalize(cross(normal, tangent));
+                           normal = normalize(normal + (tangent * derivX + bitangent * derivY) * 0.25);
+                         }
                        }
                        #endif`
                     );
 
-                    // Replace lining / color_fragment & add front-face weave color shading
+                    // Replace lining / color_fragment & add front-face weave color shading.
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <color_fragment>',
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
                        #ifdef USE_MAP
-                       {
-                         float dist = length(vViewPosition);
-                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
-
-                         float weave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade;
+                       if (uWeaveWeight > 0.001) {
+                         vec2 fw2 = fwidth(vMapUv);
+                         float pixelUV2 = max(fw2.x, fw2.y);
+                         float nyquistFade2 = 1.0 - smoothstep(0.3, 0.7, pixelUV2 * uWeaveScale);
+                         float distFade2 = 1.0 - smoothstep(1.5, 3.0, length(vViewPosition));
+                         float fade2 = nyquistFade2 * distFade2;
+                         float weave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade2;
                          if ( ! gl_FrontFacing ) {
                            vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * uWeaveWeight;
                            diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, uBleedThrough);
                          } else {
-                           // Outside: subtle micro-weave shadow for tactile depth
                            diffuseColor.rgb *= (1.0 - uWeaveWeight * 0.4) + (weave * 0.5) * uWeaveWeight * 0.8;
                          }
+                       } else if ( ! gl_FrontFacing ) {
+                         diffuseColor.rgb = mix(vec3(0.95, 0.94, 0.92), diffuseColor.rgb, uBleedThrough);
                        }
                        #else
                          if ( ! gl_FrontFacing ) {
@@ -889,12 +946,12 @@ export function GarmentPreview3D({
                       '#include <roughnessmap_fragment>',
                       `#include <roughnessmap_fragment>
                        #ifdef USE_MAP
-                       {
-                         float dist = length(vViewPosition);
-                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
-
-                         // Add micro-weave roughness variation
-                         float microWeave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade;
+                       if (uWeaveWeight > 0.001) {
+                         vec2 fw3 = fwidth(vMapUv);
+                         float pUV3 = max(fw3.x, fw3.y);
+                         float fade3 = (1.0 - smoothstep(0.3, 0.7, pUV3 * uWeaveScale))
+                                     * (1.0 - smoothstep(1.5, 3.0, length(vViewPosition)));
+                         float microWeave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade3;
                          roughnessFactor = clamp(roughnessFactor + microWeave * uWeaveWeight * 2.0, 0.05, 1.0);
                        }
                        #endif`
