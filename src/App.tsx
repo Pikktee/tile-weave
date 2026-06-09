@@ -246,6 +246,11 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
   },
 };
 
+const longestGarmentLabel = Object.values(garmentTypes).reduce(
+  (longest, current) => (current.label.length > longest.length ? current.label : longest),
+  ''
+);
+
 const initialSettings: PatternSettings = {
   density: 58,
   colorStrength: 62,
@@ -2052,9 +2057,16 @@ function App() {
                       aria-expanded={isGarmentDropdownOpen}
                       aria-controls="garment-dropdown-list"
                       onClick={() => setIsGarmentDropdownOpen((current) => !current)}
+                      style={{ display: 'inline-grid', gridTemplateColumns: 'minmax(max-content, 1fr) auto' }}
                     >
-                      <span>{selectedGarment.label}</span>
-                      <ChevronDown size={17} aria-hidden="true" />
+                      <span
+                        aria-hidden="true"
+                        style={{ gridArea: '1 / 1', visibility: 'hidden', pointerEvents: 'none' }}
+                      >
+                        {longestGarmentLabel}
+                      </span>
+                      <span style={{ gridArea: '1 / 1' }}>{selectedGarment.label}</span>
+                      <ChevronDown size={17} aria-hidden="true" style={{ gridArea: '1 / 2', justifySelf: 'end' }} />
                     </button>
                     {isGarmentDropdownOpen && (
                       <div
