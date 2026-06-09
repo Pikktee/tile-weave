@@ -79,6 +79,15 @@ fal.ai-Bildgenerierung laeuft synchron. Nutzer waehlen im Startscreen eines von 
 - Serverseitig existiert weiterhin ein img2img-Refinement-Pfad (`mode: 'refine'` mit `referenceImage`/`downscaleForRefine()` auf 768 px und `strength` aus `changeStrength`), wird aber aktuell nicht aus der UI aufgerufen. Er bleibt als Option erhalten; vor Reaktivierung beachten, dass die konservative `strength` Prompt-Anweisungen stark daempft. Wenn `FAL_REFINE_IMAGE_SIZE` dauerhaft geaendert wird, die `downscaleForRefine()`-Konstante bewusst mitpruefen.
 - Keine lokalen Ersatzkacheln erzeugen, wenn fal.ai fehlschlaegt. Fehler klar anzeigen.
 
+Kleidungsansicht / 3D-Assets:
+
+- Die Kleidungsansicht nutzt echte GLB-Modelle in `public/models/` und legt die KI-Kachel im Frontend als `MeshStandardMaterial.map` auf das jeweilige Stoffmaterial. Fuer Musterlesbarkeit ist deshalb die UV-Qualitaet des GLB entscheidend.
+- Das aktuelle Kleid-Asset ist `public/models/custom-summer-dress-new-uv.glb`, erzeugt aus `incoming/kleid-neueversion.glb` und in Blender mit Material `fabric` sowie einer `Fabric_UV`/`UVMap` aufbereitet. Der Pfad ist in `garmentTypes.kleid.modelPath` in `src/App.tsx` hinterlegt.
+- Kritische UV-Anforderungen fuer Kleid-Assets: Muster muss aufrecht stehen (V-Koordinate passend ausrichten), die zylindrische/umlaufende UV-Naht muss auf der Rueckseite liegen, und Hals-/Arm-/Saumoeffnungen duerfen keine geschlossenen Deckelflaechen enthalten, die beim Blick ins Kleid als gemusterte Innenplatte sichtbar werden.
+- Shader-Projektionen wie triplanar oder zylindrisch im Three.js-Viewer haben sich fuer illustrative, richtungsgebundene Motive nicht bewaehrt: Triplanar erzeugt Geister-/Doppelbilder durch Projektion-Blending, zylindrische Viewer-Projektion kann Motive radial verzerren oder zusammenziehen. Fuer die Kleidungsansicht deshalb bevorzugt saubere Modell-UVs verwenden statt Shader-Heuristiken.
+- Automatische Blender-Heuristiken zum Trennen von Innen-/Aussenmaterial oder Entfernen von Innenflaechen koennen bei Meshy-Modellen leicht sichtbare Aussenflaechen erwischen. Vor dem Uebernehmen neuer Kleid-Assets immer Checker-/Pattern-Previews aus Front, Rueckseite, Seite und Draufsicht rendern und die Nahtlage pruefen.
+- Gute Kandidaten fuer neue Kleidmodelle: einfache, offene Stoffhuellen mit sauberem Hals-/Armloch, klarer Aussenflaeche, Material `fabric`, vorhandenen UVs oder zumindest gut unwrapbarer Topologie. Komplexe Meshy-Falten, geschlossene Innenkoerper und fehlende UVs bedeuten meist Blender-Nacharbeit.
+
 Aktuelle Reglerlogik:
 
 - Die KI-Mustersteuerung laeuft ueber den Prompt-Chat, nicht ueber Regler. `Musterfuelle` (`density`), `Farbwirkung` (`colorStrength`) und `Entwurfsabstand` (`changeStrength`) sind aus der UI entfernt, weil sie beim Refinement keine verlaessliche Wirkung hatten. Sie existieren weiter in `PatternSettings` und werden mit Default-Werten gesendet; der Server schreibt `density`/`colorStrength` nur dann in den Prompt, wenn der Wert klar vom Neutralbereich abweicht.
