@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useId, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useRef, useState, useCallback } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -21,8 +21,32 @@ import {
   X,
   ZoomIn,
 } from 'lucide-react';
+import { GarmentPreview3D } from './GarmentPreview3D';
 
-type GarmentType = 'hemd' | 'kleid' | 'rock' | 'schal' | 'kissen';
+const RotateIcon = ({ size = 18 }: { size?: number }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {/* Crossed horizontal and vertical ellipses (3D gyroscope style) */}
+    <ellipse cx="12" cy="12" rx="9" ry="4" />
+    <ellipse cx="12" cy="12" rx="4" ry="9" />
+    {/* Arrowhead on horizontal ellipse (pointing right at bottom) */}
+    <path d="M10 14.5l2.5 1.5-2.5 1.5" />
+    {/* Arrowhead on vertical ellipse (pointing down at right) */}
+    <path d="M14.5 10l1.5 2.5 1.5-2.5" />
+  </svg>
+);
+
+type GarmentType = 'hose' | 'custom';
 
 type PatternSettings = {
   density: number;
@@ -53,12 +77,13 @@ type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 type GenerationMode = 'initial' | 'refine';
 type ImageModelKey = 'z-image' | 'flux-seamless' | 'gpt-image-2' | 'qwen-pro';
 type LegalPage = 'impressum' | 'datenschutz';
+
 type PanZoomState = {
   x: number;
   y: number;
   zoom: number;
 };
-type PreviewTool = 'pan' | 'zoom' | null;
+type PreviewTool = 'pan' | 'zoom' | 'rotate' | null;
 type FabricSize = {
   width: number;
   height: number;
@@ -102,6 +127,10 @@ const imageSettingsTooltip =
   'Verändert nur die Darstellung in den Ansichten. Die erzeugte KI-Kachel, Versionen und Prompt-Daten bleiben unverändert.';
 const viewSettingsTooltip =
   'Steuert, wie die Kachel in der Stoffbahn-Vorschau liegt und wiederholt wird. Das ändert keine KI-Datei und ist nicht druckverbindlich.';
+const startPromptTooltip =
+  'Hier beschreibst du in einfachen Worten, wie dein Stoffmuster aussehen soll, zum Beispiel Motive, Farben oder die Stimmung.';
+const startModelTooltip =
+  'Hier wählst du aus, welche Bild-KI dein Muster erstellt. Die Auswahl beeinflusst vor allem, wie nahtlos und detailreich das Ergebnis wirken kann.';
 
 // URL-Routing: jede Ansicht hat einen eigenen Pfad, damit Reload und
 // Zurueck/Vor des Browsers die richtige Ansicht treffen. Die Startseite ist '/'.
@@ -188,21 +217,13 @@ const palettes = [
 ];
 
 
-const garmentTypes: Record<GarmentType, { label: string }> = {
-  hemd: {
-    label: 'Hemd',
+const garmentTypes: Record<GarmentType, { label: string; modelPath?: string }> = {
+  hose: {
+    label: 'Hose',
+    modelPath: '/models/anime-black-trousers.glb',
   },
-  kleid: {
-    label: 'Kleid',
-  },
-  rock: {
-    label: 'Rock',
-  },
-  schal: {
-    label: 'Schal',
-  },
-  kissen: {
-    label: 'Kissen',
+  custom: {
+    label: 'Eigene',
   },
 };
 
@@ -239,12 +260,6 @@ const IMAGE_MODELS: {
     key: 'gpt-image-2',
     label: 'GPT Image 2',
     hint: 'Top-Qualität von OpenAI, ohne natives Tiling.',
-    tiling: false,
-  },
-  {
-    key: 'qwen-pro',
-    label: 'Qwen Image Pro',
-    hint: 'Sehr hohe Fidelity, ohne natives Tiling.',
     tiling: false,
   },
 ];
@@ -651,132 +666,7 @@ function PromptInput({
   );
 }
 
-function GarmentPreview({
-  image,
-  repeatSize,
-  garmentType,
-  imageFilter,
-  compact = false,
-}: {
-  image: string;
-  repeatSize: number;
-  garmentType: GarmentType;
-  imageFilter?: string;
-  compact?: boolean;
-}) {
-  const rawPatternId = useId();
-  const patternId = `garment-${rawPatternId.replace(/:/g, '')}`;
-  const tileSize = Math.max(36, Math.round(repeatSize * 4));
-  const patternFill = `url(#${patternId})`;
-  const shadeFill = `url(#${patternId}-soft-light)`;
 
-  const patternDefs = (
-    <defs>
-      <pattern id={patternId} width={tileSize} height={tileSize} patternUnits="userSpaceOnUse">
-        <image
-          href={image}
-          width={tileSize}
-          height={tileSize}
-          preserveAspectRatio="xMidYMid slice"
-          style={imageFilter ? { filter: imageFilter } : undefined}
-        />
-      </pattern>
-      <linearGradient id={`${patternId}-soft-light`} x1="0" x2="1" y1="0" y2="0">
-        <stop offset="0" stopColor="#ffffff" stopOpacity="0.28" />
-        <stop offset="0.5" stopColor="#ffffff" stopOpacity="0" />
-        <stop offset="1" stopColor="#161514" stopOpacity="0.16" />
-      </linearGradient>
-    </defs>
-  );
-
-  const getTransform = () => {
-    switch (garmentType) {
-      case 'hemd':
-        return 'translate(210, 280) scale(1.13) translate(-210, -307.5)';
-      case 'kleid':
-        return 'translate(210, 280) scale(1.04) translate(-210, -307)';
-      case 'rock':
-        return 'translate(210, 280) scale(1.03) translate(-210, -315)';
-      case 'schal':
-        return 'translate(210, 280) scale(0.88) translate(-210, -282.5)';
-      case 'kissen':
-        return 'translate(210, 280) scale(1.28) translate(-210, -235)';
-      default:
-        return undefined;
-    }
-  };
-
-  const renderGarment = () => {
-    switch (garmentType) {
-      case 'hemd':
-        return (
-          <>
-            <path className="garment-fill" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={patternFill} />
-            <path className="garment-detail" d="M132 135 L168 96 M288 135 L252 96 M210 96 L210 520 M130 240 L130 520 M290 240 L290 520" />
-            <path className="garment-shade" d="M132 135 L90 170 L45 300 L99 322 L130 240 L130 520 L290 520 L290 240 L321 322 L375 300 L330 170 L288 135 L252 95 L168 95 Z" fill={shadeFill} />
-            {[215, 255, 295, 335].map((cy) => (
-              <circle key={cy} className="garment-button" cx="210" cy={cy} r="4" />
-            ))}
-          </>
-        );
-      case 'kleid':
-        return (
-          <>
-            <path className="garment-fill" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={patternFill} />
-            <path className="garment-fill" d="M154 126 C105 138 78 181 82 234 C112 242 142 223 158 190 Z" fill={patternFill} />
-            <path className="garment-fill" d="M266 126 C315 138 342 181 338 234 C308 242 278 223 262 190 Z" fill={patternFill} />
-            <path className="garment-detail" d="M132 228 L288 228 M160 245 C190 270 230 270 260 245 M160 245 L116 538 M210 90 L210 538 M260 245 L304 538" />
-            <path className="garment-shade" d="M155 110 Q210 76 265 110 L288 228 L260 245 L328 538 L92 538 L160 245 L132 228 Z" fill={shadeFill} />
-          </>
-        );
-      case 'rock':
-        return (
-          <>
-            <path className="garment-fill" d="M 150 120 Q 210 130 270 120 Q 285 300 330 500 C 320 520, 280 520, 270 500 C 260 485, 240 485, 230 500 C 220 520, 200 520, 190 500 C 180 485, 160 485, 150 500 C 140 520, 100 520, 90 500 Q 135 300 150 120 Z" fill={patternFill} />
-            <path className="garment-fill garment-band" d="M 150 90 Q 210 100 270 90 L 270 120 Q 210 130 150 120 Z" fill={patternFill} />
-            <path className="garment-detail" d="M 150 120 Q 210 130 270 120 M 180 126 Q 165 300 150 500 M 240 126 Q 255 300 270 500 M 210 128 Q 200 300 190 500 M 160 123 Q 135 300 110 500 M 260 123 Q 285 300 310 500" />
-            <path className="garment-shade" d="M 150 120 Q 210 130 270 120 Q 285 300 330 500 C 320 520, 280 520, 270 500 C 260 485, 240 485, 230 500 C 220 520, 200 520, 190 500 C 180 485, 160 485, 150 500 C 140 520, 100 520, 90 500 Q 135 300 150 120 Z M 150 90 Q 210 100 270 90 L 270 120 Q 210 130 150 120 Z" fill={shadeFill} />
-          </>
-        );
-      case 'schal':
-        return (
-          <>
-            <path className="garment-fill" d="M 220 160 L 260 140 Q 275 320 250 515 L 210 505 Q 225 320 220 160 Z" fill={patternFill} />
-            <path className="garment-fill" d="M 170 150 Q 195 160 220 170 Q 210 320 220 485 L 180 495 Q 170 320 170 150 Z" fill={patternFill} />
-            <path className="garment-fill" d="M 150 120 C 150 65, 270 65, 270 120 C 270 165, 150 165, 150 120 Z M 180 120 C 180 135, 240 135, 240 120 C 240 90, 180 90, 180 120 Z" fill={patternFill} />
-            <path className="garment-detail" d="M 180 160 Q 210 165 240 160 M 195 165 Q 190 320 200 480 M 225 160 Q 235 320 230 510 M 185 486 v 15 M 190 487 v 15 M 195 487 v 15 M 200 488 v 15 M 205 488 v 15 M 210 487 v 15 M 215 486 v 15 M 220 485 v 15 M 215 507 v 15 M 220 509 v 15 M 225 510 v 15 M 230 512 v 15 M 235 513 v 15 M 240 514 v 15 M 245 515 v 15 M 250 515 v 15" />
-            <path className="garment-shade" d="M 150 120 C 150 65, 270 65, 270 120 C 270 165, 150 165, 150 120 Z M 180 120 C 180 135, 240 135, 240 120 C 240 90, 180 90, 180 120 Z M 220 160 L 260 140 Q 275 320 250 515 L 210 505 Q 225 320 220 160 Z M 170 150 Q 195 160 220 170 Q 210 320 220 485 L 180 495 Q 170 320 170 150 Z" fill={shadeFill} />
-          </>
-        );
-      case 'kissen':
-        return (
-          <>
-            <path className="garment-fill" d="M 90 115 C 150 90, 270 90, 330 115 C 355 175, 355 295, 330 355 C 270 380, 150 380, 90 355 C 65 295, 65 175, 90 115 Z" fill={patternFill} />
-            <path className="garment-detail" d="M 90 115 Q 115 135 135 150 M 90 115 Q 105 140 120 160 M 330 115 Q 305 135 285 150 M 330 115 Q 315 140 300 160 M 330 355 Q 305 335 285 320 M 330 355 Q 315 330 300 310 M 90 355 Q 115 335 135 320 M 90 355 Q 105 330 120 310 M 160 235 Q 210 245 260 235 M 210 185 Q 215 235 210 285" />
-            <path className="garment-shade" d="M 90 115 C 150 90, 270 90, 330 115 C 355 175, 355 295, 330 355 C 270 380, 150 380, 90 355 C 65 295, 65 175, 90 115 Z" fill={shadeFill} />
-          </>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className={compact ? 'garment-preview compact' : 'garment-preview'}>
-      <svg
-        className={`garment-svg garment-${garmentType}`}
-        viewBox="0 0 420 560"
-        role="img"
-        aria-label={`${garmentTypes[garmentType].label} mit aktuellem Muster`}
-      >
-        {patternDefs}
-        <g transform={getTransform()}>
-          {renderGarment()}
-        </g>
-      </svg>
-    </div>
-  );
-}
 
 // Animiertes Mosaik-Thumbnail fuer eine Variante, die noch generiert wird: ein 4x4-Raster,
 // das sich diagonal "aufbaut" und so einen entstehenden Bild-Platzhalter andeutet.
@@ -791,7 +681,6 @@ function MosaicThumb() {
     </span>
   );
 }
-
 
 function LegalPageView({
   page,
@@ -1000,7 +889,12 @@ function App() {
   const [atStart, setAtStart] = useState<boolean>(
     () => !pathToLegalPage(window.location.pathname) && (!restored || pathToView(window.location.pathname) === null),
   );
-  const [garmentType, setGarmentType] = useState<GarmentType>(() => restored?.garmentType ?? 'hemd');
+  const [garmentType, setGarmentType] = useState<GarmentType>(() => {
+    if (restored?.garmentType === 'hose') {
+      return restored.garmentType;
+    }
+    return 'hose';
+  });
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
   const [prompt, setPrompt] = useState(() => restored?.prompt ?? '');
   const [versions, setVersions] = useState<Version[]>(() => restored?.versions ?? []);
@@ -1026,6 +920,29 @@ function App() {
     isImageModelKey(restored?.imageModel) ? restored!.imageModel : defaultImageModel,
   );
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
+
+  // States for 3D Custom models and OrbitControls reset
+  const [customModelUrl, setCustomModelUrl] = useState<string | null>(null);
+  const [customModelName, setCustomModelName] = useState<string | null>(null);
+  const [resetTrigger, setResetTrigger] = useState<number>(0);
+  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+
+  const handleCustomModelUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (customModelUrl) {
+        URL.revokeObjectURL(customModelUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setCustomModelUrl(url);
+      setCustomModelName(file.name);
+      setGarmentType('custom');
+    }
+  };
+
+  const handleResetCompleted = () => {
+    setResetTrigger(0);
+  };
   const fabricSelectPointerFocusRef = useRef(false);
   const stageBodyRef = useRef<HTMLDivElement>(null);
   // Aktuelle Werte fuer asynchrone Varianten-Generierung im Hintergrund lesbar halten:
@@ -1042,6 +959,7 @@ function App() {
   const showGarmentControl = viewMode === 'kleidung';
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
+  const isRotateMode = previewTool === 'rotate';
   const imageFilter = makeImageAdjustmentFilter(imageAdjustments);
 
   useEffect(() => {
@@ -1076,6 +994,9 @@ function App() {
         setAtStart(false);
         setViewMode(mode);
         setPreviewTransform(initialPanZoom);
+        if (mode !== 'kleidung') {
+          setPreviewTool((current) => (current === 'rotate' ? 'pan' : current));
+        }
       } else {
         setAtStart(true);
       }
@@ -1152,17 +1073,17 @@ function App() {
   };
 
   // Bildschirmmittelpunkt der Arbeitsflaeche; Anker fuer den Tastatur-Zoom.
-  const viewCenter = (): { x: number; y: number } | null => {
+  const viewCenter = useCallback((): { x: number; y: number } | null => {
     const rect = stageBodyRef.current?.getBoundingClientRect();
     if (!rect) return null;
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  };
+  }, []);
 
   // Zoomt auf einen Zielwert und haelt dabei einen Ankerpunkt (Bildschirm-
   // koordinaten, z. B. die Mauszeiger-Position) fix. Ohne Anker wird zentriert
   // gezoomt. Referenz ist das untransformierte stage-body-Rechteck; die
   // Bildschirmposition des transform-origin ist Container-Mitte + Versatz.
-  const zoomToAnchor = (resolveZoom: (currentZoom: number) => number, anchor: { x: number; y: number } | null) => {
+  const zoomToAnchor = useCallback((resolveZoom: (currentZoom: number) => number, anchor: { x: number; y: number } | null) => {
     const node = stageBodyRef.current;
     const rect = node?.getBoundingClientRect();
     setPreviewTransform((current) => {
@@ -1178,11 +1099,11 @@ function App() {
         y: current.y - ratio * (anchor.y - centerY - current.y),
       };
     });
-  };
+  }, []);
 
-  const nudgePreview = (deltaX: number, deltaY: number) => {
+  const nudgePreview = useCallback((deltaX: number, deltaY: number) => {
     setPreviewTransform((current) => ({ ...current, x: current.x + deltaX, y: current.y + deltaY }));
-  };
+  }, []);
 
   const resetPreviewTransform = () => {
     setPreviewTransform(initialPanZoom);
@@ -1220,6 +1141,9 @@ function App() {
     setAtStart(false);
     setPreviewTransform(initialPanZoom);
     navigateToView(mode);
+    if (mode !== 'kleidung' && previewTool === 'rotate') {
+      setPreviewTool('pan');
+    }
   };
 
   const markFabricSelectPointerFocus = () => {
@@ -1280,21 +1204,33 @@ function App() {
         return;
       }
 
+      if (event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        if (viewMode === 'kleidung') {
+          setPreviewTool('rotate');
+        }
+        return;
+      }
+
       if (event.key === '+' || event.key === '=') {
         event.preventDefault();
-        zoomToAnchor((zoom) => zoom * keyboardZoomFactor, viewCenter());
+        zoomToAnchor((zoom: number) => zoom * keyboardZoomFactor, viewCenter());
         return;
       }
 
       if (event.key === '-') {
         event.preventDefault();
-        zoomToAnchor((zoom) => zoom / keyboardZoomFactor, viewCenter());
+        zoomToAnchor((zoom: number) => zoom / keyboardZoomFactor, viewCenter());
         return;
       }
 
       if (event.key === '0') {
         event.preventDefault();
-        resetPreviewTransform();
+        if (viewMode === 'kleidung') {
+          setResetTrigger((prev) => prev + 1);
+        } else {
+          resetPreviewTransform();
+        }
         return;
       }
 
@@ -1310,7 +1246,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewTransform.zoom]);
+  }, [previewTransform.zoom, viewMode, nudgePreview, viewCenter, zoomToAnchor]);
 
   // Trackpad-Pinch (und Strg+Mausrad) loesen ein wheel-Event mit ctrlKey aus,
   // das der Browser sonst als Seiten-Zoom interpretiert. Wir fangen es auf der
@@ -1319,25 +1255,30 @@ function App() {
   // Wichtig: der stage-body wird erst nach dem Startscreen gerendert (atStart/
   // hasTile), deshalb muss der Effect bei diesem Wechsel neu laufen, sonst ist
   // stageBodyRef beim ersten Mount null und der Listener haengt nie.
-  useEffect(() => {
-    const node = stageBodyRef.current;
-    if (!node) return;
+  const handleWheelNative = useCallback((event: WheelEvent) => {
+    if (viewMode === 'kleidung') return;
+    event.preventDefault();
+    const pointer = { x: event.clientX, y: event.clientY };
+    const deltaY = event.deltaY;
+    zoomToAnchor((zoom: number) => zoom * Math.exp(-deltaY * 0.003), pointer);
+  }, [viewMode, zoomToAnchor]);
 
-    const handleWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey) return;
-      event.preventDefault();
-      const pointer = { x: event.clientX, y: event.clientY };
-      const deltaY = event.deltaY;
-      zoomToAnchor((zoom) => zoom * Math.exp(-deltaY * 0.01), pointer);
-    };
-
-    node.addEventListener('wheel', handleWheel, { passive: false });
-    return () => node.removeEventListener('wheel', handleWheel);
-  }, [atStart, hasTile]);
+  // Callback ref to bind wheel listener on mount/unmount and handle conditionally rendered element updates
+  const stageBodyCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (stageBodyRef.current) {
+      stageBodyRef.current.removeEventListener('wheel', handleWheelNative);
+    }
+    stageBodyRef.current = node;
+    if (node) {
+      node.addEventListener('wheel', handleWheelNative, { passive: false });
+    }
+  }, [handleWheelNative]);
 
   const startPreviewInteraction = (event: PointerEvent<HTMLDivElement>) => {
     if (isZoomMode && event.button === 0) {
-      updatePreviewZoom(previewTransform.zoom + (event.altKey ? -previewZoomStep : previewZoomStep));
+      const pointer = { x: event.clientX, y: event.clientY };
+      const step = event.altKey ? -previewZoomStep : previewZoomStep;
+      zoomToAnchor((zoom: number) => zoom + step, pointer);
       return;
     }
 
@@ -1716,13 +1657,31 @@ function App() {
               </h1>
             </div>
             <div className="prompt-field">
-              <label htmlFor="start-prompt">Deine Musteridee</label>
+              <label htmlFor="start-prompt">
+                <span className="start-field-label">
+                  <span>Deine Musteridee</span>
+                  <span className="control-tooltip" tabIndex={0} aria-label={startPromptTooltip}>
+                    <CircleHelp size={14} />
+                    <span className="control-tooltip-popup" role="tooltip">
+                      {startPromptTooltip}
+                    </span>
+                  </span>
+                </span>
+              </label>
               <PromptInput value={prompt} onChange={setPrompt} />
             </div>
 
             <div className="model-field">
               <span className="model-field__label" id="model-field-label">
-                Bild-KI-Modell
+                <span className="start-field-label">
+                  <span>Bild-KI-Modell</span>
+                  <span className="control-tooltip" tabIndex={0} aria-label={startModelTooltip}>
+                    <CircleHelp size={14} />
+                    <span className="control-tooltip-popup" role="tooltip">
+                      {startModelTooltip}
+                    </span>
+                  </span>
+                </span>
               </span>
               <div className="model-options" role="radiogroup" aria-labelledby="model-field-label">
                 {IMAGE_MODELS.map((model) => (
@@ -1737,7 +1696,8 @@ function App() {
                   >
                     <span className="model-option__name">{model.label}</span>
                     <span className={`model-option__badge${model.tiling ? '' : ' model-option__badge--warn'}`}>
-                      {model.tiling ? 'Nahtlos' : 'Kann Nähte zeigen'}
+                      {model.tiling ? <Grid size={12} aria-hidden="true" /> : <TriangleAlert size={12} aria-hidden="true" />}
+                      <span>{model.tiling ? 'Rapport-sicher' : 'Nahtprüfung nötig'}</span>
                     </span>
                     <span className="model-option__hint">{model.hint}</span>
                   </button>
@@ -2002,7 +1962,17 @@ function App() {
                       key={type}
                       className={garmentType === type ? 'active' : ''}
                       type="button"
-                      onClick={() => setGarmentType(type)}
+                      onClick={() => {
+                        if (type === 'custom') {
+                          if (!customModelUrl) {
+                            setShowUploadModal(true);
+                          } else {
+                            setGarmentType('custom');
+                          }
+                        } else {
+                          setGarmentType(type);
+                        }
+                      }}
                     >
                       {garmentTypes[type].label}
                     </button>
@@ -2011,10 +1981,29 @@ function App() {
               )}
 
               <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
+                {viewMode === 'kleidung' && (
+                  <button
+                    className={previewTool === 'rotate' ? 'icon-button active' : 'icon-button'}
+                    type="button"
+                    onClick={() => setPreviewTool('rotate')}
+                    aria-pressed={previewTool === 'rotate'}
+                    aria-label="Drehen aktivieren"
+                    title="Dreh-Werkzeug (R)"
+                  >
+                    <RotateIcon size={20} />
+                  </button>
+                )}
                 <button
                   className={isPanMode ? 'icon-button active' : 'icon-button'}
                   type="button"
-                  onClick={() => setPreviewTool((current) => (current === 'pan' ? null : 'pan'))}
+                  onClick={() =>
+                    setPreviewTool((current) => {
+                      if (viewMode === 'kleidung') {
+                        return current === 'pan' ? 'rotate' : 'pan';
+                      }
+                      return current === 'pan' ? null : 'pan';
+                    })
+                  }
                   aria-pressed={isPanMode}
                   aria-label="Panning aktivieren"
                   title="Hand-Werkzeug (H)"
@@ -2024,7 +2013,14 @@ function App() {
                 <button
                   className={isZoomMode ? 'icon-button active' : 'icon-button'}
                   type="button"
-                  onClick={() => setPreviewTool((current) => (current === 'zoom' ? null : 'zoom'))}
+                  onClick={() =>
+                    setPreviewTool((current) => {
+                      if (viewMode === 'kleidung') {
+                        return current === 'zoom' ? 'rotate' : 'zoom';
+                      }
+                      return current === 'zoom' ? null : 'zoom';
+                    })
+                  }
                   aria-pressed={isZoomMode}
                   aria-label="Zoom-Modus aktivieren"
                   title="Zoom-Werkzeug (Z), Alt-Klick verkleinert"
@@ -2047,7 +2043,13 @@ function App() {
                 <button
                   className="icon-button"
                   type="button"
-                  onClick={resetPreviewTransform}
+                  onClick={() => {
+                    if (viewMode === 'kleidung') {
+                      setResetTrigger((prev) => prev + 1);
+                    } else {
+                      resetPreviewTransform();
+                    }
+                  }}
                   aria-label="Ansicht zurücksetzen"
                   title="Ansicht zurücksetzen (0)"
                 >
@@ -2058,45 +2060,60 @@ function App() {
           </div>
 
           <div
-            ref={stageBodyRef}
-            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${panStart ? ' is-panning' : ''}`}
-            onPointerDown={startPreviewInteraction}
-            onPointerMove={movePreviewPan}
-            onPointerUp={stopPreviewPan}
-            onPointerCancel={stopPreviewPan}
-            onLostPointerCapture={stopPreviewPan}
+            ref={stageBodyCallbackRef}
+            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${isRotateMode ? ' rotate-enabled' : ''}${panStart ? ' is-panning' : ''}`}
+            onPointerDown={viewMode !== 'kleidung' ? startPreviewInteraction : undefined}
+            onPointerMove={viewMode !== 'kleidung' ? movePreviewPan : undefined}
+            onPointerUp={viewMode !== 'kleidung' ? stopPreviewPan : undefined}
+            onPointerCancel={viewMode !== 'kleidung' ? stopPreviewPan : undefined}
+            onLostPointerCapture={viewMode !== 'kleidung' ? stopPreviewPan : undefined}
           >
-            <div
-              className="pan-zoom-content"
-              style={{
-                transform: `translate3d(${previewTransform.x}px, ${previewTransform.y}px, 0) scale(${previewTransform.zoom})`,
-              }}
-            >
-              {viewMode === 'stoffbahn' && (
-                <div className="fabric-view">
-                  <FabricPreview
-                    image={tileImage}
-                    repeatSize={settings.repeatSize}
-                    fabricSize={fabricSize}
-                    offsetX={offsetX}
-                    offsetY={offsetY}
-                    imageFilter={imageFilter}
-                  />
-                </div>
-              )}
+            {viewMode === 'kleidung' ? (
+              <div className="garment-view-3d-container">
+                <GarmentPreview3D
+                  modelUrl={garmentType === 'custom' && customModelUrl ? customModelUrl : (garmentTypes.hose.modelPath || '')}
+                  image={tileImage}
+                  repeatSize={settings.repeatSize}
+                  imageFilter={imageFilter}
+                  previewTool={previewTool}
+                  resetTrigger={resetTrigger}
+                  onResetCompleted={handleResetCompleted}
+                  zoom={previewTransform.zoom}
+                  onZoomChange={updatePreviewZoom}
+                />
+                {garmentType === 'custom' && customModelUrl && (
+                  <div className="custom-model-actions">
+                    <button
+                      type="button"
+                      className="ghost-button change-btn"
+                      onClick={() => setShowUploadModal(true)}
+                    >
+                      Modell wechseln ({customModelName})
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className="pan-zoom-content"
+                style={{
+                  transform: `translate3d(${previewTransform.x}px, ${previewTransform.y}px, 0) scale(${previewTransform.zoom})`,
+                }}
+              >
+                {viewMode === 'stoffbahn' && (
+                  <div className="fabric-view">
+                    <FabricPreview
+                      image={tileImage}
+                      repeatSize={settings.repeatSize}
+                      fabricSize={fabricSize}
+                      offsetX={offsetX}
+                      offsetY={offsetY}
+                      imageFilter={imageFilter}
+                    />
+                  </div>
+                )}
 
-              {viewMode === 'kleidung' && (
-                <div className="garment-view">
-                  <GarmentPreview
-                    image={tileImage}
-                    repeatSize={settings.repeatSize}
-                    garmentType={garmentType}
-                    imageFilter={imageFilter}
-                  />
-                </div>
-              )}
-
-              {viewMode === 'kachel' && (
+                {viewMode === 'kachel' && (
                 <div className="tile-view">
                   <article className="tile-card">
                     <div className="tile-card-header">
@@ -2129,7 +2146,8 @@ function App() {
               )}
 
             </div>
-          </div>
+          )}
+        </div>
 
           {(isGenerating || activeIsPending) && (
             <LoadingOverlay key={activeVersionId} mode={generationMode} imageModel={imageModel} />
@@ -2281,6 +2299,67 @@ function App() {
           </div>
         </aside>
       </section>
+
+      {showUploadModal && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div className="confirm-dialog upload-modal">
+            <div className="modal-header">
+              <h3 id="modal-title" className="modal-title-text">Eigenes 3D-Modell (.glb) laden</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  if (!customModelUrl) {
+                    setGarmentType('hose');
+                  }
+                }}
+                aria-label="Schließen"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="custom-model-upload-zone modal-body">
+              <div className="upload-zone-card">
+                <div className="upload-zone-icon">
+                  <Shirt size={44} />
+                </div>
+                <p>Wähle eine 3D-Modelldatei (.glb) aus, um dein Muster darauf zu projizieren.</p>
+                <label htmlFor="glb-upload" className="primary-button upload-btn">
+                  Datei auswählen
+                </label>
+                <input
+                  id="glb-upload"
+                  type="file"
+                  accept=".glb"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    handleCustomModelUpload(e);
+                    setShowUploadModal(false);
+                  }}
+                />
+                <span className="upload-zone-hint">
+                  Das Modell sollte UV-Texturkoordinaten enthalten.
+                </span>
+              </div>
+            </div>
+            <div className="confirm-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  if (!customModelUrl) {
+                    setGarmentType('hose');
+                  }
+                }}
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNewIdeaConfirm && (
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">

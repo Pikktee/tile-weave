@@ -1,11 +1,20 @@
 import 'dotenv/config';
 import dotenv from 'dotenv';
 import express from 'express';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
 
 dotenv.config({ path: '.env.local', override: false });
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
+// In Produktion (Railway) muss an alle Interfaces gebunden werden; lokal bleibt
+// die App auf Loopback, damit der Vite-Devserver das /api-Proxy bedient.
+const host = process.env.HOST ?? (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.resolve(__dirname, '..', 'dist');
 
 // Bildgenerierung läuft über fal.ai. Nutzer wählen im Startscreen eines von mehreren
 // Modellen; jedes hat ein eigenes Request-Schema, das hier über eine Registry gekapselt
@@ -532,6 +541,21 @@ app.post('/api/generate-pattern', async (req, res) => {
   }
 });
 
-app.listen(port, '127.0.0.1', () => {
-  console.log(`Tile Weave API läuft auf http://127.0.0.1:${port}`);
+// In Produktion liefert derselbe Express-Server das gebaute Frontend aus.
+// Lokal existiert kein dist/-Build; dort uebernimmt der Vite-Devserver die UI
+// und proxyt nur /api hierher. Deshalb das statische Serving nur aktivieren,
+// wenn ein Build vorliegt.
+if (fs.existsSync(path.join(distDir, 'index.html'))) {
+  app.use(express.static(distDir));
+
+  // SPA-Fallback: alle Nicht-API-GET-Routen auf index.html, damit das
+  // History-API-Routing (z. B. /stoffbahn) auch bei Direktaufruf/Reload greift.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
+
+app.listen(port, host, () => {
+  console.log(`Tile Weave läuft auf http://${host}:${port}`);
 });
