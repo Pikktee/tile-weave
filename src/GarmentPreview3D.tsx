@@ -111,11 +111,11 @@ const getBackgroundStyle = (preset: 'standard' | 'showroom' | 'sunset' | 'neon')
     case 'standard':
       return 'transparent';
     case 'showroom':
-      return 'linear-gradient(180deg, rgba(228, 222, 211, 0.12) 0%, rgba(200, 191, 176, 0.24) 100%)';
+      return 'linear-gradient(180deg, rgba(244, 241, 235, 0.85) 0%, rgba(224, 218, 206, 0.85) 100%)';
     case 'sunset':
-      return 'linear-gradient(180deg, rgba(252, 224, 199, 0.12) 0%, rgba(243, 166, 131, 0.18) 40%, rgba(87, 75, 144, 0.24) 100%)';
+      return 'linear-gradient(180deg, rgba(24, 25, 43, 0.88) 0%, rgba(48, 33, 56, 0.88) 40%, rgba(120, 55, 75, 0.88) 75%, rgba(200, 95, 70, 0.88) 100%)';
     case 'neon':
-      return 'linear-gradient(180deg, rgba(30, 20, 50, 0.15) 0%, rgba(15, 10, 30, 0.3) 100%)';
+      return 'linear-gradient(180deg, rgba(12, 8, 20, 0.9) 0%, rgba(22, 10, 35, 0.9) 50%, rgba(8, 4, 16, 0.95) 100%)';
   }
 };
 
@@ -341,6 +341,7 @@ export function GarmentPreview3D({
         const targetDistance = targetDistanceRef.current;
         const currentDistance = cam.position.distanceTo(ctrl.target);
         
+        let programmaticChange = false;
         if (Math.abs(currentDistance - targetDistance) > 0.005) {
           const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           let newDistance = targetDistance;
@@ -349,18 +350,22 @@ export function GarmentPreview3D({
           }
           const direction = new THREE.Vector3().subVectors(cam.position, ctrl.target).normalize();
           
+          programmaticChange = true;
           isProgrammaticRef.current = true;
           cam.position.copy(ctrl.target).addScaledVector(direction, newDistance);
-          isProgrammaticRef.current = false;
         } else if (currentDistance !== targetDistance) {
           const direction = new THREE.Vector3().subVectors(cam.position, ctrl.target).normalize();
           
+          programmaticChange = true;
           isProgrammaticRef.current = true;
           cam.position.copy(ctrl.target).addScaledVector(direction, targetDistance);
-          isProgrammaticRef.current = false;
         }
         
         ctrl.update();
+        
+        if (programmaticChange) {
+          isProgrammaticRef.current = false;
+        }
 
         // Physics calculation for the inertia fabric swing effect
         const now = performance.now();
@@ -445,94 +450,94 @@ export function GarmentPreview3D({
     if (!ambient || !hemi || !dir1 || !dir2 || !spot) return;
 
     if (lightingPreset === 'standard') {
-      ambient.color.set('#fffaed');
-      ambient.intensity = 0.6; // Slightly brighter ambient fill
+      ambient.color.set('#ffffff');
+      ambient.intensity = 0.35; // Soft general fill
 
-      hemi.color.set('#fffdfa');
-      hemi.groundColor.set('#555555');
-      hemi.intensity = 0.8; // Clean, natural sky light
+      hemi.color.set('#ffffff');
+      hemi.groundColor.set('#777777');
+      hemi.intensity = 0.4; // Soft sky-to-ground natural lighting
 
-      dir1.color.set('#fffdf5');
-      dir1.intensity = 1.1; // Direct daylight key light
+      dir1.color.set('#fffbf0');
+      dir1.intensity = 0.85; // Front-right daylight key light
       dir1.position.set(5, 10, 7);
 
-      dir2.color.set('#e2f1ff');
-      dir2.intensity = 0.6; // Soft cool rim light from behind
+      dir2.color.set('#e8f2ff');
+      dir2.intensity = 0.35; // Soft cool rim fill from behind
       dir2.position.set(-5, 5, -7);
 
       spot.intensity = 0.0;
     } else if (lightingPreset === 'showroom') {
-      // Boutique-Schaufenster: enger Overhead-Spot + starkes Gegenlicht für Silhouette
+      // Boutique-Schaufenster: enger Overhead-Spot + warmes Vorderlicht und kühles Rimlight
       ambient.color.set('#ffe8cc');
       ambient.intensity = 0.15;
 
-      hemi.color.set('#fff0e0');
-      hemi.groundColor.set('#221100');
+      hemi.color.set('#fff5e6');
+      hemi.groundColor.set('#332211');
       hemi.intensity = 0.2;
 
-      dir1.color.set('#ffe8c8');  // warmes Füll-Licht von vorne links
-      dir1.intensity = 0.35;
+      dir1.color.set('#ffe3c0');  // warm key light from front-left
+      dir1.intensity = 0.4;
       dir1.position.set(-3, 4, 6);
 
-      dir2.color.set('#e8f4ff');  // kühles, starkes Gegenlicht für Schulter-Silhouette
-      dir2.intensity = 1.5;
+      dir2.color.set('#dbeeff');  // balanced cool rim light
+      dir2.intensity = 0.7;
       dir2.position.set(1, 6, -8);
 
-      spot.color.set('#fff8f0');  // enger Bühnenstrahler von oben
-      spot.intensity = 9.0;
+      spot.color.set('#fff5eb');  // spotlight from above
+      spot.intensity = 3.5;
       spot.position.set(0, 8, 2);
       spot.distance = 16.0;
-      spot.angle = Math.PI / 7;  // sehr enger Strahl
-      spot.penumbra = 0.9;       // weiches Randlicht
-      spot.decay = 1.5;
+      spot.angle = Math.PI / 6;  // slightly wider focus beam
+      spot.penumbra = 0.8;       // soft edges
+      spot.decay = 2.0;
     } else if (lightingPreset === 'sunset') {
-      // Goldene Stunde: tief stehende Sonne von der Seite, kühle Schatten
-      ambient.color.set('#ffcca0');
-      ambient.intensity = 0.12;
+      // Goldene Stunde: warme Abendsonne von der Seite, stimmungsvoller periwinkle Schattenwurf
+      ambient.color.set('#ffa080');
+      ambient.intensity = 0.08;
 
-      hemi.color.set('#ff9a5c');
-      hemi.groundColor.set('#180e08');
-      hemi.intensity = 0.15;
+      hemi.color.set('#b07890');
+      hemi.groundColor.set('#201a30');
+      hemi.intensity = 0.12;
 
-      dir1.color.set('#ff7a20');  // intensiver flacher Sonnenstrahl
-      dir1.intensity = 3.0;
-      dir1.position.set(9, 1.5, 4);
+      dir1.color.set('#ff9e59');  // soft warm sunset ray
+      dir1.intensity = 1.2;
+      dir1.position.set(8, 2.0, 5);
 
-      dir2.color.set('#3a5c8a');  // kühles blaues Abendhimmel-Füllicht
-      dir2.intensity = 0.85;
-      dir2.position.set(-9, 5, 2);
+      dir2.color.set('#406090');  // twilight periwinkle sky fill
+      dir2.intensity = 0.4;
+      dir2.position.set(-8, 4, 3);
 
-      spot.color.set('#ffb040');  // goldenes Gegenlicht von hinten unten
-      spot.intensity = 7.0;
+      spot.color.set('#ffaf50');  // warm rim light from back-left
+      spot.intensity = 2.5;
       spot.position.set(-4, 3, -9);
-      spot.distance = 17.0;
-      spot.angle = Math.PI / 3.5;
-      spot.penumbra = 0.7;
-      spot.decay = 1.2;
+      spot.distance = 16.0;
+      spot.angle = Math.PI / 4;
+      spot.penumbra = 0.8;
+      spot.decay = 2.0;
     } else if (lightingPreset === 'neon') {
-      // Club-Bühne: dunkle Basis, drei bunte Lichter
+      // Club-Bühne: dunkles Ambiente mit stilvollem, nicht überstrahlendem Cyan/Magenta/Violett-Farbspektrum
       ambient.color.set('#080312');
-      ambient.intensity = 0.1;
+      ambient.intensity = 0.08;
 
-      hemi.color.set('#001133');
-      hemi.groundColor.set('#220011');
-      hemi.intensity = 0.05;
+      hemi.color.set('#0a1030');
+      hemi.groundColor.set('#1a0520');
+      hemi.intensity = 0.08;
 
-      dir1.color.set('#00e0ff');  // kräftiger Cyan-Key von rechts vorne
-      dir1.intensity = 2.0;
+      dir1.color.set('#00c0ff');  // Cyan key light from front-right
+      dir1.intensity = 1.1;
       dir1.position.set(5, 5, 4);
 
-      dir2.color.set('#ff00cc');  // Magenta-Fill von links
-      dir2.intensity = 1.6;
+      dir2.color.set('#ff00a0');  // Magenta fill from left
+      dir2.intensity = 0.9;
       dir2.position.set(-5, 3, 4);
 
-      spot.color.set('#9900ff');  // violetter Rim-Strahler von hinten
-      spot.intensity = 5.5;
+      spot.color.set('#8000ff');  // deep violet backlight
+      spot.intensity = 2.2;
       spot.position.set(0, 5, -8);
-      spot.distance = 17.0;
-      spot.angle = Math.PI / 2.8;
-      spot.penumbra = 0.6;
-      spot.decay = 1.4;
+      spot.distance = 16.0;
+      spot.angle = Math.PI / 3.0;
+      spot.penumbra = 0.8;
+      spot.decay = 1.8;
     }
   }, [lightingPreset]);
 
@@ -708,9 +713,11 @@ export function GarmentPreview3D({
 
         // Adjust camera position & target based on model size
         if (cameraRef.current && controlsRef.current) {
+          isProgrammaticRef.current = true;
           controlsRef.current.target.set(0, 0, 0);
           cameraRef.current.position.set(0, 0, 2.4);
           controlsRef.current.update();
+          isProgrammaticRef.current = false;
 
           lastAngleRef.current = Math.atan2(cameraRef.current.position.x, cameraRef.current.position.z);
           velocityYRef.current = 0;
