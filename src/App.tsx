@@ -223,7 +223,7 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
   hose: {
     label: 'Hose',
     description: 'Gerader Zuschnitt mit klarer Rapportwirkung',
-    modelPath: '/models/anime-black-trousers.glb',
+    modelPath: '/models/custom-trousers-uv.glb',
   },
   kleid: {
     label: 'Kleid',
