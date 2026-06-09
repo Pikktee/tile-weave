@@ -1480,7 +1480,7 @@ function App() {
     setImageAdjustments(initialImageAdjustments);
     setOffsetX(50);
     setOffsetY(50);
-    setGarmentType('hose');
+    setGarmentType('kleid');
     if (customModelUrl) {
       URL.revokeObjectURL(customModelUrl);
       setCustomModelUrl(null);
@@ -2566,7 +2566,7 @@ function App() {
                 onClick={() => {
                   setShowUploadModal(false);
                   if (!customModelUrl) {
-                    setGarmentType('hose');
+                    setGarmentType('kleid');
                   }
                 }}
                 aria-label="Schließen"
@@ -2605,7 +2605,7 @@ function App() {
                 onClick={() => {
                   setShowUploadModal(false);
                   if (!customModelUrl) {
-                    setGarmentType('hose');
+                    setGarmentType('kleid');
                   }
                 }}
               >
