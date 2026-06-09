@@ -220,11 +220,6 @@ const palettes = [
 
 
 const garmentTypes: Record<GarmentType, { label: string; description: string; modelPath?: string }> = {
-  hose: {
-    label: 'Hose',
-    description: 'Gerader Zuschnitt mit klarer Rapportwirkung',
-    modelPath: '/models/custom-trousers-uv.glb',
-  },
   kleid: {
     label: 'Sommerkleid',
     description: 'Luftiges Trägerkleid mit leichtem A-Linien-Fall',
@@ -234,6 +229,11 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
     label: 'Midikleid',
     description: 'Elegantes, tailliertes Wadenkleid mit weitem Rockfall',
     modelPath: '/models/midi-dress.glb',
+  },
+  hose: {
+    label: 'Hose',
+    description: 'Gerader Zuschnitt mit klarer Rapportwirkung',
+    modelPath: '/models/custom-trousers-uv.glb',
   },
   hoodie: {
     label: 'Hoodie',
@@ -914,14 +914,10 @@ function App() {
     () => !pathToLegalPage(window.location.pathname) && (!restored || pathToView(window.location.pathname) === null),
   );
   const [garmentType, setGarmentType] = useState<GarmentType>(() => {
-    if (
-      restored?.garmentType === 'hose' ||
-      restored?.garmentType === 'kleid' ||
-      restored?.garmentType === 'midikleid'
-    ) {
+    if (restored?.garmentType && restored.garmentType in garmentTypes) {
       return restored.garmentType;
     }
-    return 'hose';
+    return 'kleid';
   });
   const [showMannequin, setShowMannequin] = useState<boolean>(() => restored?.showMannequin ?? true);
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
