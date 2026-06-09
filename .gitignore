@@ -2,6 +2,12 @@ node_modules
 dist
 artifacts
 incoming/
+
+# Ungenutzte Kleid-Zwischenstaende aus dem Blender-Workflow (aktiv: custom-summer-dress-new-uv.glb)
+public/models/custom-summer-dress-clean-uv.glb
+public/models/custom-summer-dress-fabric-only.glb
+public/models/custom-summer-dress.glb
+
 .env
 .env.local
 .DS_Store

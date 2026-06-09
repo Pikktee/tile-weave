@@ -7,6 +7,8 @@ interface GarmentPreview3DProps {
   modelUrl: string;
   image: string;
   repeatSize: number;
+  offsetX?: number;
+  offsetY?: number;
   imageFilter?: string;
   previewTool: 'pan' | 'zoom' | 'rotate' | null;
   resetTrigger: number;
@@ -16,10 +18,28 @@ interface GarmentPreview3DProps {
   showMannequin?: boolean;
 }
 
+const applyTextureTransform = (
+  texture: THREE.Texture | null,
+  repeatSize: number,
+  offsetX = 50,
+  offsetY = 50,
+) => {
+  if (!texture) return;
+
+  // repeatSize goes from 6 to 120 (default 32)
+  // Map so smaller repeatSize = more repetitions, larger = less.
+  const repeatVal = 180 / repeatSize;
+  texture.repeat.set(repeatVal, repeatVal);
+  texture.offset.set((offsetX - 50) / 100, (50 - offsetY) / 100);
+  texture.needsUpdate = true;
+};
+
 export function GarmentPreview3D({
   modelUrl,
   image,
   repeatSize,
+  offsetX = 50,
+  offsetY = 50,
   imageFilter,
   previewTool,
   resetTrigger,
@@ -37,6 +57,7 @@ export function GarmentPreview3D({
   const textureRef = useRef<THREE.Texture | null>(null);
   const targetDistanceRef = useRef<number>(2.4);
   const isProgrammaticRef = useRef<boolean>(false);
+  const textureTransformRef = useRef({ repeatSize, offsetX, offsetY });
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,12 +81,13 @@ export function GarmentPreview3D({
       // 2. Set wrap & repeat values
       canvasTexture.wrapS = THREE.RepeatWrapping;
       canvasTexture.wrapT = THREE.RepeatWrapping;
-
-      // repeatSize goes from 6 to 120 (default 32)
-      // Map so smaller repeatSize = more repetitions, larger = less
-      const repeatVal = 180 / repeatSize;
-      canvasTexture.repeat.set(repeatVal, repeatVal);
       canvasTexture.colorSpace = THREE.SRGBColorSpace;
+      applyTextureTransform(
+        canvasTexture,
+        textureTransformRef.current.repeatSize,
+        textureTransformRef.current.offsetX,
+        textureTransformRef.current.offsetY,
+      );
 
       // Apply max anisotropy for crisp rendering on angles
       if (rendererRef.current) {
@@ -114,7 +136,7 @@ export function GarmentPreview3D({
     } catch (e) {
       console.error('Error applying pattern texture to 3D model:', e);
     }
-  }, [image, repeatSize, imageFilter]);
+  }, [image, imageFilter]);
 
   // 1. Initialize Scene, Camera, Renderer, Lights, and OrbitControls
   useEffect(() => {
@@ -241,7 +263,12 @@ export function GarmentPreview3D({
     };
   }, []);
 
-  // Keep a ref of applyPatternTexture so the model loading effect doesn't re-trigger on slider changes
+  useEffect(() => {
+    textureTransformRef.current = { repeatSize, offsetX, offsetY };
+    applyTextureTransform(textureRef.current, repeatSize, offsetX, offsetY);
+  }, [repeatSize, offsetX, offsetY]);
+
+  // Keep a ref of applyPatternTexture so the model loading effect doesn't re-trigger on image changes
   const applyPatternTextureRef = useRef(applyPatternTexture);
   useEffect(() => {
     applyPatternTextureRef.current = applyPatternTexture;

@@ -127,7 +127,7 @@ const newVersionTooltip =
 const imageSettingsTooltip =
   'Verändert nur die Darstellung in den Ansichten. Die erzeugte KI-Kachel, Versionen und Prompt-Daten bleiben unverändert.';
 const viewSettingsTooltip =
-  'Steuert, wie die Kachel in der Stoffbahn-Vorschau liegt und wiederholt wird. Das ändert keine KI-Datei und ist nicht druckverbindlich.';
+  'Steuert, wie die Kachel in Stoffbahn- und Kleidung-Vorschau liegt und wiederholt wird. Das ändert keine KI-Datei und ist nicht druckverbindlich.';
 const startPromptTooltip =
   'Hier beschreibst du in einfachen Worten, wie dein Stoffmuster aussehen soll, zum Beispiel Motive, Farben oder die Stimmung.';
 const startModelTooltip =
@@ -1934,15 +1934,15 @@ function App() {
             <Slider
               label="Horizontaler Versatz"
               value={offsetX}
-              hint="Verschiebt das Muster horizontal – nur in der Stoffbahn-Ansicht aktiv."
-              disabled={viewMode !== 'stoffbahn'}
+              hint="Verschiebt das Muster horizontal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
+              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
               onChange={updateOffsetX}
             />
             <Slider
               label="Vertikaler Versatz"
               value={offsetY}
-              hint="Verschiebt das Muster vertikal – nur in der Stoffbahn-Ansicht aktiv."
-              disabled={viewMode !== 'stoffbahn'}
+              hint="Verschiebt das Muster vertikal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
+              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
               onChange={updateOffsetY}
             />
           </div>
@@ -2180,6 +2180,8 @@ function App() {
                   modelUrl={garmentType === 'custom' && customModelUrl ? customModelUrl : (garmentTypes[garmentType].modelPath || '')}
                   image={tileImage}
                   repeatSize={settings.repeatSize}
+                  offsetX={offsetX}
+                  offsetY={offsetY}
                   imageFilter={imageFilter}
                   previewTool={previewTool}
                   resetTrigger={resetTrigger}
