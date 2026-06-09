@@ -857,6 +857,17 @@ function LegalPageView({
                 keine druckverbindlichen Produktionsdaten.
               </p>
             </section>
+
+            <a
+              className="legal-backlink"
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigateHome();
+              }}
+            >
+              Zurück zur Hauptseite
+            </a>
           </div>
         ) : (
           <div className="legal-card">
@@ -936,6 +947,17 @@ function LegalPageView({
                 beschweren.
               </p>
             </section>
+
+            <a
+              className="legal-backlink"
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigateHome();
+              }}
+            >
+              Zurück zur Hauptseite
+            </a>
           </div>
         )}
 
@@ -1686,8 +1708,11 @@ function App() {
 
           <form className="start-composer" onSubmit={handleStartSubmit}>
             <div className="prompt-lead">
-              <h1>
-                <span>Gestalte dein Stoffmuster mit KI</span>
+              <h1 className="start-title" aria-label="Gestalte dein Stoffmuster">
+                <span className="start-title__line start-title__main" aria-hidden="true">
+                  <span>Gestalte dein</span>
+                  <span className="start-title__focus">Stoffmuster</span>
+                </span>
               </h1>
             </div>
             <div className="prompt-field">

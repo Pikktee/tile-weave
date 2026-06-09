@@ -266,21 +266,49 @@ textarea:focus-visible {
 .prompt-lead {
   position: relative;
   display: grid;
-  margin-bottom: 0;
+  margin-bottom: 18px;
 }
 
-.prompt-lead h1 {
+.start-title {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.02;
+  text-align: center;
+}
+
+.start-title__line {
   display: block;
-  max-width: 640px;
-  margin: 0;
-  line-height: 1.08;
+  color: var(--ink);
+  font-size: clamp(1.82rem, 4.35vw, 3.18rem);
+  font-weight: 560;
+  letter-spacing: -0.018em;
 }
 
-.prompt-lead h1 span {
-  color: var(--ink);
-  font-size: clamp(2rem, 4.4vw, 3.1rem);
+.start-title__main {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.2em;
+}
+
+.start-title__focus {
+  display: inline-block;
+  width: fit-content;
+  padding: 0.12em 0.3em 0.2em;
+  border-radius: 18px 28px 18px 32px;
+  color: #fffaf0;
   font-weight: 680;
-  letter-spacing: 0;
+  background:
+    linear-gradient(135deg, rgba(244, 91, 105, 0.96), rgba(212, 64, 79, 0.96)),
+    var(--coral);
+  box-shadow:
+    0 14px 30px rgba(244, 91, 105, 0.16),
+    inset 0 -8px 0 rgba(22, 21, 20, 0.08);
+  transform: rotate(-1deg);
 }
 
 .prompt-field {
@@ -592,6 +620,29 @@ textarea:focus-visible {
   padding: 1px 5px;
   color: var(--ink);
   background: rgba(25, 23, 22, 0.06);
+}
+
+.legal-backlink {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid rgba(25, 23, 22, 0.12);
+  border-radius: 999px;
+  padding: 0 15px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.52);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.legal-backlink:hover,
+.legal-backlink:focus-visible {
+  border-color: rgba(25, 23, 22, 0.2);
+  background: #fffaf3;
 }
 
 .panel,
@@ -2033,6 +2084,19 @@ input[type="range"] {
     border-radius: 18px;
   }
 
+  .start-title {
+    gap: 0;
+  }
+
+  .start-title__line {
+    font-size: clamp(1.64rem, 7.2vw, 2.1rem);
+    letter-spacing: -0.018em;
+  }
+
+  .start-title__main {
+    gap: 0.14em;
+  }
+
   .panel,
   .preview-stage {
     border-radius: 18px;
@@ -2137,6 +2201,12 @@ input[type="range"] {
   .tile-repeat-pattern,
   .garment-svg image {
     transition: filter 160ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-title__focus {
+    transform: none;
   }
 }
 
