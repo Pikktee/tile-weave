@@ -680,7 +680,7 @@ export function GarmentPreview3D({
                 if (!isAccessory) {
                   // Convert MeshStandardMaterial to MeshPhysicalMaterial
                   const physicalMat = new THREE.MeshPhysicalMaterial();
-                  physicalMat.copy(mat);
+                  THREE.MeshStandardMaterial.prototype.copy.call(physicalMat, mat);
 
                   physicalMat.roughness = 0.85; // Fabric is rough
                   physicalMat.metalness = 0.1;  // Fabric is non-metallic
@@ -944,7 +944,7 @@ export function GarmentPreview3D({
       {error && (
         <div
           className="generating-overlay"
-          style={{ background: 'rgba(255, 252, 246, 0.95)', padding: '20px', textAlign: 'center' }}
+          style={{ background: 'rgba(255, 252, 246, 0.95)', padding: '20px', textAlign: 'center', zIndex: 1 }}
         >
           <span style={{ fontSize: '2rem', color: 'var(--coral)' }}>⚠️</span>
           <strong style={{ fontSize: '1.1rem', marginTop: '10px', color: 'var(--ink)' }}>Fehler beim Laden</strong>
