@@ -322,19 +322,57 @@ export function GarmentPreview3D({
         const model = gltf.scene;
         modelGroupRef.current = model;
 
-        // Auto-center and normalize scale of the model
+        // 1. Temporarily hide mannequin/body meshes to compute bounding box based only on the garment
+        const mannequinVisibilityMap = new Map<THREE.Object3D, boolean>();
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            const meshName = (mesh.name || '').toLowerCase();
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            const isMannequin =
+              meshName.includes('mannequin') ||
+              meshName.includes('body') ||
+              materials.some((mat) => {
+                const matName = (mat.name || '').toLowerCase();
+                return matName.includes('mannequin') || matName.includes('body');
+              });
+
+            if (isMannequin) {
+              mannequinVisibilityMap.set(mesh, mesh.visible);
+              mesh.visible = false;
+            }
+          }
+        });
+
+        // 2. Reset scale and position of model group to calculate its raw local box
+        model.scale.set(1, 1, 1);
+        model.position.set(0, 0, 0);
+        model.updateMatrixWorld(true);
+
         const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        // Center the model's group
-        model.position.sub(center);
-
-        // Scale the model so its max dimension is approximately 1.8 units
+        // 3. Scale the model so its max dimension is targetSize
         const maxDim = Math.max(size.x, size.y, size.z);
-        const targetSize = 1.8;
-        const scaleFactor = targetSize / (maxDim || 1);
+        const targetSize = 1.6; // 1.6 leaves a nice ~10% padding on top and bottom
+        const scaleFactor = maxDim > 0 ? targetSize / maxDim : 1.0;
         model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+        // 4. Update matrix world to apply the scale
+        model.updateMatrixWorld(true);
+
+        // 5. Compute the box of the SCALED model to get the exact world center
+        const scaledBox = new THREE.Box3().setFromObject(model);
+        const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+
+        // 6. Set the group position to perfectly center the scaled model at (0, 0, 0)
+        model.position.copy(scaledCenter).multiplyScalar(-1);
+        model.updateMatrixWorld(true);
+
+        // 7. Restore mannequin visibility
+        mannequinVisibilityMap.forEach((visible, obj) => {
+          obj.visible = visible;
+        });
 
         // Adjust camera position & target based on model size
         if (cameraRef.current && controlsRef.current) {
