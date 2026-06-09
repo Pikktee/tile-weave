@@ -1,5 +1,6 @@
 import { type CSSProperties, type FormEvent, type PointerEvent, useEffect, useRef, useState, useCallback } from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronUp,
   CircleHelp,
@@ -46,7 +47,7 @@ const RotateIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
-type GarmentType = 'hose' | 'custom';
+type GarmentType = 'hose' | 'kleid' | 'custom';
 
 type PatternSettings = {
   density: number;
@@ -170,6 +171,7 @@ type SessionSnapshot = {
   offsetY: number;
   viewMode: ViewMode;
   imageModel: ImageModelKey;
+  showMannequin?: boolean;
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -217,13 +219,20 @@ const palettes = [
 ];
 
 
-const garmentTypes: Record<GarmentType, { label: string; modelPath?: string }> = {
+const garmentTypes: Record<GarmentType, { label: string; description: string; modelPath?: string }> = {
   hose: {
     label: 'Hose',
+    description: 'Gerader Zuschnitt mit klarer Rapportwirkung',
     modelPath: '/models/anime-black-trousers.glb',
+  },
+  kleid: {
+    label: 'Kleid',
+    description: 'Stofffall und Flächenwirkung prüfen',
+    modelPath: '/models/custom-summer-dress-new-uv.glb',
   },
   custom: {
     label: 'Eigene',
+    description: 'Eigenes GLB-Modell laden',
   },
 };
 
@@ -890,11 +899,12 @@ function App() {
     () => !pathToLegalPage(window.location.pathname) && (!restored || pathToView(window.location.pathname) === null),
   );
   const [garmentType, setGarmentType] = useState<GarmentType>(() => {
-    if (restored?.garmentType === 'hose') {
+    if (restored?.garmentType === 'hose' || restored?.garmentType === 'kleid') {
       return restored.garmentType;
     }
     return 'hose';
   });
+  const [showMannequin, setShowMannequin] = useState<boolean>(() => restored?.showMannequin ?? true);
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
   const [prompt, setPrompt] = useState(() => restored?.prompt ?? '');
   const [versions, setVersions] = useState<Version[]>(() => restored?.versions ?? []);
@@ -923,9 +933,9 @@ function App() {
 
   // States for 3D Custom models and OrbitControls reset
   const [customModelUrl, setCustomModelUrl] = useState<string | null>(null);
-  const [customModelName, setCustomModelName] = useState<string | null>(null);
   const [resetTrigger, setResetTrigger] = useState<number>(0);
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [isGarmentDropdownOpen, setIsGarmentDropdownOpen] = useState(false);
 
   const handleCustomModelUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -935,7 +945,6 @@ function App() {
       }
       const url = URL.createObjectURL(file);
       setCustomModelUrl(url);
-      setCustomModelName(file.name);
       setGarmentType('custom');
     }
   };
@@ -945,6 +954,7 @@ function App() {
   };
   const fabricSelectPointerFocusRef = useRef(false);
   const stageBodyRef = useRef<HTMLDivElement>(null);
+  const garmentDropdownRef = useRef<HTMLDivElement>(null);
   // Aktuelle Werte fuer asynchrone Varianten-Generierung im Hintergrund lesbar halten:
   // der Completion-Callback laeuft spaeter und darf nicht auf veraltete Closures zugreifen.
   const activeVersionIdRef = useRef(activeVersionId);
@@ -957,6 +967,7 @@ function App() {
     (version) => version.id === activeVersionId && version.status === 'pending',
   );
   const showGarmentControl = viewMode === 'kleidung';
+  const selectedGarment = garmentTypes[garmentType];
   const isPanMode = previewTool === 'pan';
   const isZoomMode = previewTool === 'zoom';
   const isRotateMode = previewTool === 'rotate';
@@ -968,6 +979,19 @@ function App() {
   useEffect(() => {
     versionsRef.current = versions;
   }, [versions]);
+
+  useEffect(() => {
+    if (!isGarmentDropdownOpen) return undefined;
+
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      if (!garmentDropdownRef.current?.contains(event.target as Node)) {
+        setIsGarmentDropdownOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [isGarmentDropdownOpen]);
 
   // URL beim ersten Laden normalisieren: eine Ansichts-URL ohne wiederhergestellte
   // Kachel ergibt keinen Sinn -> auf die Startseite zuruecksetzen. atStart ist in
@@ -1038,6 +1062,7 @@ function App() {
       offsetY,
       viewMode,
       imageModel,
+      showMannequin,
     });
   }, [
     tileImage,
@@ -1052,6 +1077,7 @@ function App() {
     offsetY,
     viewMode,
     imageModel,
+    showMannequin,
   ]);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
@@ -1160,6 +1186,36 @@ function App() {
     setPointerFocusedFabricSelect(null);
   };
 
+  const selectGarmentType = (nextType: GarmentType) => {
+    if (nextType === 'custom') {
+      if (!customModelUrl) {
+        setShowUploadModal(true);
+      } else {
+        setGarmentType('custom');
+      }
+      setIsGarmentDropdownOpen(false);
+      return;
+    }
+
+    setGarmentType(nextType);
+    setIsGarmentDropdownOpen(false);
+    if (customModelUrl) {
+      URL.revokeObjectURL(customModelUrl);
+      setCustomModelUrl(null);
+    }
+  };
+
+  const handleGarmentDropdownKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      setIsGarmentDropdownOpen(false);
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setIsGarmentDropdownOpen(true);
+    }
+  };
+
   useEffect(() => {
     const handleAltDown = (event: KeyboardEvent) => {
       if (event.key === 'Alt') setIsAltPressed(true);
@@ -1228,6 +1284,7 @@ function App() {
         event.preventDefault();
         if (viewMode === 'kleidung') {
           setResetTrigger((prev) => prev + 1);
+          resetPreviewTransform();
         } else {
           resetPreviewTransform();
         }
@@ -1376,6 +1433,11 @@ function App() {
     setImageAdjustments(initialImageAdjustments);
     setOffsetX(50);
     setOffsetY(50);
+    setGarmentType('hose');
+    if (customModelUrl) {
+      URL.revokeObjectURL(customModelUrl);
+      setCustomModelUrl(null);
+    }
     clearSession();
     if (window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
@@ -1956,28 +2018,71 @@ function App() {
                 </div>
               )}
               {showGarmentControl && (
-                <div className="garment-picker" aria-label="Anwendung wählen">
-                  {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
+                <>
+                  <div
+                    ref={garmentDropdownRef}
+                    className={isGarmentDropdownOpen ? 'garment-dropdown open' : 'garment-dropdown'}
+                    onKeyDown={handleGarmentDropdownKeyDown}
+                  >
+                    <span className="garment-select-picker__label">
+                      <Shirt size={15} />
+                      Kleidung
+                    </span>
                     <button
-                      key={type}
-                      className={garmentType === type ? 'active' : ''}
+                      className="garment-dropdown__trigger"
                       type="button"
-                      onClick={() => {
-                        if (type === 'custom') {
-                          if (!customModelUrl) {
-                            setShowUploadModal(true);
-                          } else {
-                            setGarmentType('custom');
-                          }
-                        } else {
-                          setGarmentType(type);
-                        }
-                      }}
+                      aria-haspopup="listbox"
+                      aria-expanded={isGarmentDropdownOpen}
+                      aria-controls="garment-dropdown-list"
+                      onClick={() => setIsGarmentDropdownOpen((current) => !current)}
                     >
-                      {garmentTypes[type].label}
+                      <span>{selectedGarment.label}</span>
+                      <ChevronDown size={17} aria-hidden="true" />
                     </button>
-                  ))}
-                </div>
+                    {isGarmentDropdownOpen && (
+                      <div
+                        id="garment-dropdown-list"
+                        className="garment-dropdown__menu"
+                        role="listbox"
+                        aria-label="Kleidungsstück wählen"
+                      >
+                        {(Object.keys(garmentTypes) as GarmentType[]).map((type) => (
+                          <button
+                            key={type}
+                            className={garmentType === type ? 'garment-dropdown__option selected' : 'garment-dropdown__option'}
+                            type="button"
+                            role="option"
+                            aria-selected={garmentType === type}
+                            onClick={() => selectGarmentType(type)}
+                          >
+                            <span className="garment-dropdown__option-mark">
+                              {garmentType === type && <Check size={14} aria-hidden="true" />}
+                            </span>
+                            <span className="garment-dropdown__option-copy">
+                              <strong>{garmentTypes[type].label}</strong>
+                              <small>{garmentTypes[type].description}</small>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {garmentType === 'custom' && (
+                    <div className="mannequin-toggle-container">
+                      <label className="mannequin-toggle-label">
+                        <span>Puppe anzeigen</span>
+                        <div className="switch">
+                          <input
+                            type="checkbox"
+                            checked={showMannequin}
+                            onChange={(event) => setShowMannequin(event.target.checked)}
+                          />
+                          <span className="slider-toggle" />
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="viewport-controls" aria-label="Arbeitsfläche bewegen und zoomen">
@@ -2046,6 +2151,7 @@ function App() {
                   onClick={() => {
                     if (viewMode === 'kleidung') {
                       setResetTrigger((prev) => prev + 1);
+                      resetPreviewTransform();
                     } else {
                       resetPreviewTransform();
                     }
@@ -2061,7 +2167,7 @@ function App() {
 
           <div
             ref={stageBodyCallbackRef}
-            className={`stage-body${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${isRotateMode ? ' rotate-enabled' : ''}${panStart ? ' is-panning' : ''}`}
+            className={`stage-body view-mode-${viewMode}${isPanMode ? ' panning-enabled' : ''}${isZoomMode ? ' zooming-enabled' : ''}${isZoomMode && isAltPressed ? ' alt-zooming' : ''}${isRotateMode ? ' rotate-enabled' : ''}${panStart ? ' is-panning' : ''}`}
             onPointerDown={viewMode !== 'kleidung' ? startPreviewInteraction : undefined}
             onPointerMove={viewMode !== 'kleidung' ? movePreviewPan : undefined}
             onPointerUp={viewMode !== 'kleidung' ? stopPreviewPan : undefined}
@@ -2071,7 +2177,7 @@ function App() {
             {viewMode === 'kleidung' ? (
               <div className="garment-view-3d-container">
                 <GarmentPreview3D
-                  modelUrl={garmentType === 'custom' && customModelUrl ? customModelUrl : (garmentTypes.hose.modelPath || '')}
+                  modelUrl={garmentType === 'custom' && customModelUrl ? customModelUrl : (garmentTypes[garmentType].modelPath || '')}
                   image={tileImage}
                   repeatSize={settings.repeatSize}
                   imageFilter={imageFilter}
@@ -2080,6 +2186,7 @@ function App() {
                   onResetCompleted={handleResetCompleted}
                   zoom={previewTransform.zoom}
                   onZoomChange={updatePreviewZoom}
+                  showMannequin={showMannequin}
                 />
                 {garmentType === 'custom' && customModelUrl && (
                   <div className="custom-model-actions">
@@ -2088,7 +2195,7 @@ function App() {
                       className="ghost-button change-btn"
                       onClick={() => setShowUploadModal(true)}
                     >
-                      Modell wechseln ({customModelName})
+                      Modell wechseln
                     </button>
                   </div>
                 )}
