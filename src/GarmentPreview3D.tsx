@@ -367,6 +367,12 @@ export function GarmentPreview3D({
 
         // 6. Set the group position to perfectly center the scaled model at (0, 0, 0)
         model.position.copy(scaledCenter).multiplyScalar(-1);
+
+        // Visual adjustment for specific models to achieve perfect visual centering
+        if (modelUrl.toLowerCase().includes('hoodie')) {
+          model.position.y += 0.06; // Shift up slightly since the hood is thin and makes the model look too low
+        }
+
         model.updateMatrixWorld(true);
 
         // 7. Restore mannequin visibility
