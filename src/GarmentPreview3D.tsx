@@ -134,7 +134,13 @@ export function GarmentPreview3D({
                     `#include <color_fragment>
                      #ifdef DOUBLE_SIDED
                      if ( ! gl_FrontFacing ) {
-                       diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
+                       #ifdef USE_MAP
+                         float weave = sin(vMapUv.x * 4000.0) * sin(vMapUv.y * 4000.0);
+                         vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * 0.02;
+                         diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, 0.18);
+                       #else
+                         diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
+                       #endif
                      }
                      #endif`
                   );
@@ -436,7 +442,13 @@ export function GarmentPreview3D({
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
                        if ( ! gl_FrontFacing ) {
-                         diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
+                         #ifdef USE_MAP
+                           float weave = sin(vMapUv.x * 4000.0) * sin(vMapUv.y * 4000.0);
+                           vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * 0.02;
+                           diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, 0.18);
+                         #else
+                           diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
+                         #endif
                        }
                        #endif`
                     );
