@@ -173,7 +173,7 @@ type SessionSnapshot = {
   imageModel: ImageModelKey;
   showMannequin?: boolean;
   materialPreset?: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset?: 'studio' | 'catwalk' | 'sunset';
+  lightingPreset?: 'studio' | 'showroom' | 'sunset';
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -925,7 +925,7 @@ function App() {
   const [materialPreset, setMaterialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
     () => restored?.materialPreset ?? 'standard'
   );
-  const [lightingPreset, setLightingPreset] = useState<'studio' | 'catwalk' | 'sunset'>(
+  const [lightingPreset, setLightingPreset] = useState<'studio' | 'showroom' | 'sunset'>(
     () => restored?.lightingPreset ?? 'studio'
   );
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
@@ -2038,12 +2038,12 @@ function App() {
                     Studio
                   </button>
                   <button
-                    className={lightingPreset === 'catwalk' ? 'active' : ''}
+                    className={lightingPreset === 'showroom' ? 'active' : ''}
                     type="button"
-                    onClick={() => setLightingPreset('catwalk')}
+                    onClick={() => setLightingPreset('showroom')}
                     style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
                   >
-                    Catwalk
+                    Showroom
                   </button>
                   <button
                     className={lightingPreset === 'sunset' ? 'active' : ''}

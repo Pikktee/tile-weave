@@ -18,7 +18,7 @@ interface GarmentPreview3DProps {
   onZoomChange: (zoom: number) => void;
   showMannequin?: boolean;
   materialPreset: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset: 'studio' | 'catwalk' | 'sunset';
+  lightingPreset: 'studio' | 'showroom' | 'sunset';
 }
 
 interface CustomShaderUniforms {
@@ -26,6 +26,8 @@ interface CustomShaderUniforms {
   uWeaveWeight: { value: number };
   uBleedThrough: { value: number };
   uInertia: { value: number };
+  uMinY: { value: number };
+  uMaxY: { value: number };
 }
 
 const applyTextureTransform = (
@@ -46,53 +48,64 @@ const applyTextureTransform = (
 
 const MATERIAL_SETTINGS = {
   standard: {
-    roughness: 0.85,
-    metalness: 0.1,
+    roughness: 0.80,
+    metalness: 0.05,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
-    sheen: 0.0,
-    sheenRoughness: 0.0,
+    sheen: 0.2,
+    sheenRoughness: 0.5,
     sheenColor: '#ffffff',
     uWeaveScale: 4000.0,
-    uWeaveWeight: 0.01,
+    uWeaveWeight: 0.015,
     uBleedThrough: 0.18,
   },
   silk: {
-    roughness: 0.15,
-    metalness: 0.0,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.1,
-    sheen: 0.8,
-    sheenRoughness: 0.2,
-    sheenColor: '#ffe6f0',
+    roughness: 0.18,
+    metalness: 0.08,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.08,
+    sheen: 1.0,
+    sheenRoughness: 0.15,
+    sheenColor: '#ffd9e6', // beautiful warm pink sheen
     uWeaveScale: 6000.0,
-    uWeaveWeight: 0.005,
+    uWeaveWeight: 0.005, // very fine
     uBleedThrough: 0.25,
   },
   linen: {
-    roughness: 0.95,
+    roughness: 0.98, // very dry and matte
     metalness: 0.0,
     clearcoat: 0.0,
     clearcoatRoughness: 0.0,
     sheen: 0.0,
     sheenRoughness: 0.0,
     sheenColor: '#ffffff',
-    uWeaveScale: 1200.0,
-    uWeaveWeight: 0.035,
-    uBleedThrough: 0.10,
+    uWeaveScale: 800.0, // very coarse, visible weave threads
+    uWeaveWeight: 0.07, // very pronounced gaps
+    uBleedThrough: 0.08,
   },
   sport: {
-    roughness: 0.5,
-    metalness: 0.1,
-    clearcoat: 0.1,
-    clearcoatRoughness: 0.1,
-    sheen: 0.3,
-    sheenRoughness: 0.2,
+    roughness: 0.45,
+    metalness: 0.02,
+    clearcoat: 0.15,
+    clearcoatRoughness: 0.2,
+    sheen: 0.5,
+    sheenRoughness: 0.3,
     sheenColor: '#ffffff',
-    uWeaveScale: 3000.0,
-    uWeaveWeight: 0.02,
+    uWeaveScale: 2500.0, // honeycomb texture
+    uWeaveWeight: 0.04, // visible knit holes
     uBleedThrough: 0.15,
   },
+};
+
+const getBackgroundStyle = (preset: 'studio' | 'showroom' | 'sunset') => {
+  switch (preset) {
+    case 'studio':
+      return 'linear-gradient(180deg, #f7f3eb 0%, #e8e2d5 100%)';
+    case 'showroom':
+      return 'linear-gradient(180deg, #e4ded3 0%, #c8bfb0 100%)';
+    case 'sunset':
+      return 'linear-gradient(180deg, #fce0c7 0%, #f3a683 40%, #574b90 100%)';
+  }
 };
 
 export function GarmentPreview3D({
@@ -347,7 +360,7 @@ export function GarmentPreview3D({
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const k = prefersReducedMotion ? 100.0 : 25.0; // stiffer spring = less displacement
         const c = prefersReducedMotion ? 10.0 : 3.5;   // higher damping
-        const externalForce = prefersReducedMotion ? 0.0 : -velocityYRef.current * 0.03;
+        const externalForce = prefersReducedMotion ? 0.0 : -velocityYRef.current * 0.6;
 
         const force = -k * inertiaDisplacementRef.current - c * inertiaVelocityRef.current + externalForce;
         inertiaVelocityRef.current += force * deltaTime;
@@ -423,35 +436,35 @@ export function GarmentPreview3D({
       dir2.color.set('#e2f1ff');
       dir2.intensity = 0.4;
       dir2.position.set(-5, 5, -7);
-    } else if (lightingPreset === 'catwalk') {
-      ambient.color.set('#ffffff');
-      ambient.intensity = 0.1;
+    } else if (lightingPreset === 'showroom') {
+      ambient.color.set('#fffaed');
+      ambient.intensity = 0.6;
 
       hemi.color.set('#ffffff');
-      hemi.groundColor.set('#111111');
-      hemi.intensity = 0.2;
+      hemi.groundColor.set('#776655');
+      hemi.intensity = 0.5;
 
-      dir1.color.set('#ffffff');
-      dir1.intensity = 1.8;
-      dir1.position.set(0, 15, 5);
+      dir1.color.set('#ffeedd');
+      dir1.intensity = 1.2;
+      dir1.position.set(6, 8, 4);
 
-      dir2.color.set('#ffffff');
-      dir2.intensity = 0.8;
-      dir2.position.set(-4, 4, -8);
+      dir2.color.set('#ccddee');
+      dir2.intensity = 0.5;
+      dir2.position.set(-6, 4, -4);
     } else if (lightingPreset === 'sunset') {
       ambient.color.set('#ffebd1');
       ambient.intensity = 0.4;
 
-      hemi.color.set('#ffdfc4');
-      hemi.groundColor.set('#2b1b10');
-      hemi.intensity = 0.5;
+      hemi.color.set('#ffd3b6');
+      hemi.groundColor.set('#3c2010');
+      hemi.intensity = 0.4;
 
-      dir1.color.set('#ffb066');
-      dir1.intensity = 1.2;
-      dir1.position.set(8, 4, 6);
+      dir1.color.set('#ffa64d');
+      dir1.intensity = 1.6;
+      dir1.position.set(10, 3, 5);
 
-      dir2.color.set('#99c2ff');
-      dir2.intensity = 0.3;
+      dir2.color.set('#7080a0');
+      dir2.intensity = 0.5;
       dir2.position.set(-8, 5, -6);
     }
   }, [lightingPreset]);
@@ -647,9 +660,16 @@ export function GarmentPreview3D({
 
             // Ensure normals exist for lighting
             const geometry = mesh.geometry;
-            if (geometry && !geometry.attributes.normal) {
-              geometry.computeVertexNormals();
+            if (geometry) {
+              if (!geometry.attributes.normal) {
+                geometry.computeVertexNormals();
+              }
+              if (!geometry.boundingBox) {
+                geometry.computeBoundingBox();
+              }
             }
+            const localMinY = geometry?.boundingBox ? geometry.boundingBox.min.y : -1.0;
+            const localMaxY = geometry?.boundingBox ? geometry.boundingBox.max.y : 1.0;
 
             // Adjust material for better texture display
             const isArray = Array.isArray(mesh.material);
@@ -691,7 +711,9 @@ export function GarmentPreview3D({
                     uWeaveScale: { value: 4000.0 },
                     uWeaveWeight: { value: 0.01 },
                     uBleedThrough: { value: 0.18 },
-                    uInertia: { value: 0.0 }
+                    uInertia: { value: 0.0 },
+                    uMinY: { value: localMinY },
+                    uMaxY: { value: localMaxY }
                   };
                   shaderUniformsRef.current.push(customUniforms);
 
@@ -701,6 +723,8 @@ export function GarmentPreview3D({
                     shader.uniforms.uWeaveWeight = customUniforms.uWeaveWeight;
                     shader.uniforms.uBleedThrough = customUniforms.uBleedThrough;
                     shader.uniforms.uInertia = customUniforms.uInertia;
+                    shader.uniforms.uMinY = customUniforms.uMinY;
+                    shader.uniforms.uMaxY = customUniforms.uMaxY;
 
                     // Add uniforms declarations at the top of fragment shader
                     shader.fragmentShader = `
@@ -709,33 +733,51 @@ export function GarmentPreview3D({
                       uniform float uBleedThrough;
                     ` + shader.fragmentShader;
 
-                    // Replace lining / color_fragment
+                    // Replace lining / color_fragment & add front-face weave color shading
                     shader.fragmentShader = shader.fragmentShader.replace(
                       '#include <color_fragment>',
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
-                       if ( ! gl_FrontFacing ) {
-                         #ifdef USE_MAP
-                           float weave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                       #ifdef USE_MAP
+                         float weave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                         if ( ! gl_FrontFacing ) {
                            vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * uWeaveWeight;
                            diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, uBleedThrough);
-                         #else
+                         } else {
+                           // Outside: subtle micro-weave shadow for tactile depth
+                           diffuseColor.rgb *= (1.0 - uWeaveWeight * 0.4) + (weave * 0.5) * uWeaveWeight * 0.8;
+                         }
+                       #else
+                         if ( ! gl_FrontFacing ) {
                            diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
-                         #endif
-                       }
+                         }
+                       #endif
+                       #endif`
+                    );
+
+                    // Inject roughness modulation
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                      '#include <roughnessmap_fragment>',
+                      `#include <roughnessmap_fragment>
+                       #ifdef USE_MAP
+                         // Add micro-weave roughness variation
+                         float microWeave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                         roughnessFactor = clamp(roughnessFactor + microWeave * uWeaveWeight * 2.0, 0.05, 1.0);
                        #endif`
                     );
 
                     // Add uniforms declarations at the top of vertex shader
                     shader.vertexShader = `
                       uniform float uInertia;
+                      uniform float uMinY;
+                      uniform float uMaxY;
                     ` + shader.vertexShader;
 
                     // Replace begin_vertex
                     shader.vertexShader = shader.vertexShader.replace(
                       '#include <begin_vertex>',
                       `#include <begin_vertex>
-                       float heightFactor = clamp((0.8 - position.y) / 1.6, 0.0, 1.0);
+                       float heightFactor = clamp((uMaxY - position.y) / (uMaxY - uMinY), 0.0, 1.0);
                        float flex = heightFactor * heightFactor;
                        transformed.x += -position.z * uInertia * flex;
                        transformed.z += position.x * uInertia * flex;
@@ -915,9 +957,19 @@ export function GarmentPreview3D({
   }, [previewTool, onZoomChange]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        background: getBackgroundStyle(lightingPreset),
+        transition: 'background 500ms ease',
+        borderRadius: '24px',
+        overflow: 'hidden'
+      }}
+    >
       {/* 3D Canvas Container */}
-      <div ref={containerRef} style={{ width: '100%', height: '100%', outline: 'none' }} />
+      <div ref={containerRef} style={{ width: '100%', height: '100%', outline: 'none', background: 'transparent' }} />
 
       {/* Autoplay Button */}
       <button
