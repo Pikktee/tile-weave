@@ -226,13 +226,13 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
     modelPath: '/models/custom-trousers-uv.glb',
   },
   kleid: {
-    label: 'Kleid',
-    description: 'Stofffall und Flächenwirkung prüfen',
+    label: 'Sommerkleid',
+    description: 'Luftiges Trägerkleid mit leichtem A-Linien-Fall',
     modelPath: '/models/custom-summer-dress-new-uv.glb',
   },
   midikleid: {
     label: 'Midikleid',
-    description: 'Tailliertes Midikleid mit weitem Rockfall',
+    description: 'Elegantes, tailliertes Wadenkleid mit weitem Rockfall',
     modelPath: '/models/midi-dress.glb',
   },
   hoodie: {
