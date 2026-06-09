@@ -130,8 +130,8 @@ export function GarmentPreview3D({
                 mat.side = THREE.DoubleSide;
                 mat.onBeforeCompile = (shader) => {
                   shader.fragmentShader = shader.fragmentShader.replace(
-                    'vec4 diffuseColor = vec4( diffuse, opacity );',
-                    `vec4 diffuseColor = vec4( diffuse, opacity );
+                    '#include <color_fragment>',
+                    `#include <color_fragment>
                      #ifdef DOUBLE_SIDED
                      if ( ! gl_FrontFacing ) {
                        diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
@@ -388,8 +388,8 @@ export function GarmentPreview3D({
                   mat.side = THREE.DoubleSide;
                   mat.onBeforeCompile = (shader) => {
                     shader.fragmentShader = shader.fragmentShader.replace(
-                      'vec4 diffuseColor = vec4( diffuse, opacity );',
-                      `vec4 diffuseColor = vec4( diffuse, opacity );
+                      '#include <color_fragment>',
+                      `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
                        if ( ! gl_FrontFacing ) {
                          diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
