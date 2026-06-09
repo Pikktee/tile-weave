@@ -173,7 +173,7 @@ type SessionSnapshot = {
   imageModel: ImageModelKey;
   showMannequin?: boolean;
   materialPreset?: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset?: 'studio' | 'showroom' | 'sunset' | 'neon';
+  lightingPreset?: 'standard' | 'showroom' | 'sunset' | 'neon';
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -925,8 +925,8 @@ function App() {
   const [materialPreset, setMaterialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
     () => restored?.materialPreset ?? 'standard'
   );
-  const [lightingPreset, setLightingPreset] = useState<'studio' | 'showroom' | 'sunset' | 'neon'>(
-    () => restored?.lightingPreset ?? 'studio'
+  const [lightingPreset, setLightingPreset] = useState<'standard' | 'showroom' | 'sunset' | 'neon'>(
+    () => restored?.lightingPreset ?? 'standard'
   );
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
   const [prompt, setPrompt] = useState(() => restored?.prompt ?? '');
@@ -959,6 +959,23 @@ function App() {
   const [resetTrigger, setResetTrigger] = useState<number>(0);
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
   const [isGarmentDropdownOpen, setIsGarmentDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const win = window as unknown as Record<string, unknown>;
+      win.__setTileWeaveTestState = (data: { tileImage: string; viewMode: ViewMode }) => {
+        if (data.tileImage) setTileImage(data.tileImage);
+        if (data.viewMode) setViewMode(data.viewMode);
+        setAtStart(false);
+      };
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        const win = window as unknown as Record<string, unknown>;
+        delete win.__setTileWeaveTestState;
+      }
+    };
+  }, []);
 
   const handleCustomModelUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1938,44 +1955,46 @@ function App() {
             />
           </div>
 
-          <div className="refinement-block">
-            <div className="label-row">
-              <span>
-                <Ruler size={16} />
-                Rapport & Ausrichtung
-                <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={viewSettingsTooltip}>
-                  <CircleHelp size={14} />
-                  <span className="control-tooltip-popup" role="tooltip">
-                    {viewSettingsTooltip}
+          {viewMode !== 'kachel' && (
+            <div className="refinement-block">
+              <div className="label-row">
+                <span>
+                  <Ruler size={16} />
+                  Rapport & Ausrichtung
+                  <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={viewSettingsTooltip}>
+                    <CircleHelp size={14} />
+                    <span className="control-tooltip-popup" role="tooltip">
+                      {viewSettingsTooltip}
+                    </span>
                   </span>
                 </span>
-              </span>
+              </div>
+              <Slider
+                label="Rapportmaß"
+                value={settings.repeatSize}
+                min={6}
+                max={120}
+                hint="Vorschau-Maß pro Kachel – in der Stoffbahn- und Kleidung-Ansicht aktiv."
+                valueFormatter={formatRapportSize}
+                disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
+                onChange={(value) => updateSetting('repeatSize', value)}
+              />
+              <Slider
+                label="Horizontaler Versatz"
+                value={offsetX}
+                hint="Verschiebt das Muster horizontal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
+                disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
+                onChange={updateOffsetX}
+              />
+              <Slider
+                label="Vertikaler Versatz"
+                value={offsetY}
+                hint="Verschiebt das Muster vertikal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
+                disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
+                onChange={updateOffsetY}
+              />
             </div>
-            <Slider
-              label="Rapportmaß"
-              value={settings.repeatSize}
-              min={6}
-              max={120}
-              hint="Vorschau-Maß pro Kachel – in der Stoffbahn- und Kleidung-Ansicht aktiv."
-              valueFormatter={formatRapportSize}
-              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
-              onChange={(value) => updateSetting('repeatSize', value)}
-            />
-            <Slider
-              label="Horizontaler Versatz"
-              value={offsetX}
-              hint="Verschiebt das Muster horizontal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
-              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
-              onChange={updateOffsetX}
-            />
-            <Slider
-              label="Vertikaler Versatz"
-              value={offsetY}
-              hint="Verschiebt das Muster vertikal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
-              disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
-              onChange={updateOffsetY}
-            />
-          </div>
+          )}
 
           {viewMode === 'kleidung' && (
             <div className="refinement-block" style={{ borderTop: '1px solid var(--line)', paddingTop: '16px', marginTop: '12px' }}>
@@ -1989,7 +2008,7 @@ function App() {
                 <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
                   Stoffart
                 </span>
-                <div className="segmented" style={{ width: '100%' }}>
+                <div className="segmented segmented-premium" style={{ width: '100%' }}>
                   <button
                     className={materialPreset === 'standard' ? 'active' : ''}
                     type="button"
@@ -2028,14 +2047,14 @@ function App() {
                 <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
                   Lichtstimmung
                 </span>
-                <div className="segmented" style={{ width: '100%' }}>
+                <div className="segmented segmented-premium" style={{ width: '100%' }}>
                   <button
-                    className={lightingPreset === 'studio' ? 'active' : ''}
+                    className={lightingPreset === 'standard' ? 'active' : ''}
                     type="button"
-                    onClick={() => setLightingPreset('studio')}
+                    onClick={() => setLightingPreset('standard')}
                     style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
                   >
-                    Studio
+                    Standard
                   </button>
                   <button
                     className={lightingPreset === 'showroom' ? 'active' : ''}

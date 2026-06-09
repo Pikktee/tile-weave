@@ -18,12 +18,13 @@ interface GarmentPreview3DProps {
   onZoomChange: (zoom: number) => void;
   showMannequin?: boolean;
   materialPreset: 'standard' | 'linen' | 'silk' | 'sport';
-  lightingPreset: 'studio' | 'showroom' | 'sunset' | 'neon';
+  lightingPreset: 'standard' | 'showroom' | 'sunset' | 'neon';
 }
 
 interface CustomShaderUniforms {
   uWeaveScale: { value: number };
   uWeaveWeight: { value: number };
+  uWeaveType: { value: number };
   uBleedThrough: { value: number };
   uInertia: { value: number };
   uMinY: { value: number };
@@ -56,19 +57,21 @@ const MATERIAL_SETTINGS = {
     sheenRoughness: 0.5,
     sheenColor: '#ffffff',
     uWeaveScale: 400.0,
-    uWeaveWeight: 0.08,
+    uWeaveWeight: 0.0, // Standard-Stoffart hat keinen Web-Effekt
+    uWeaveType: 0.0, // Plain Weave Standard
     uBleedThrough: 0.18,
   },
   silk: {
-    roughness: 0.28, // smooth satin, has a nice spread highlight but not mirror plastic
+    roughness: 0.35, // smooth satin, has a nice spread highlight but not mirror plastic
     metalness: 0.0,
-    clearcoat: 0.05, // very subtle gloss lacquer
-    clearcoatRoughness: 0.08,
-    sheen: 1.0, // full velvet sheen
-    sheenRoughness: 0.25,
-    sheenColor: '#ffeef5', // beautiful warm pink sheen
-    uWeaveScale: 1200.0, // extremely fine
+    clearcoat: 0.0, // remove clearcoat to prevent plastic look
+    clearcoatRoughness: 0.0,
+    sheen: 1.0, // full silk/satin sheen
+    sheenRoughness: 0.2, // soft satin spread
+    sheenColor: '#ffffff',
+    uWeaveScale: 800.0, // fine weave
     uWeaveWeight: 0.02,
+    uWeaveType: 0.0, // Plain Weave Fine
     uBleedThrough: 0.25,
   },
   linen: {
@@ -81,6 +84,7 @@ const MATERIAL_SETTINGS = {
     sheenColor: '#ffffff',
     uWeaveScale: 150.0, // coarse weave, clearly visible
     uWeaveWeight: 0.22, // strong faden-depth shadows
+    uWeaveType: 1.0, // Linen weave type with irregularities
     uBleedThrough: 0.08,
   },
   sport: {
@@ -93,20 +97,21 @@ const MATERIAL_SETTINGS = {
     sheenColor: '#ffffff',
     uWeaveScale: 280.0, // technical mesh grid
     uWeaveWeight: 0.14, // visible honeycomb holes
+    uWeaveType: 2.0, // Sport mesh type
     uBleedThrough: 0.15,
   },
 };
 
-const getBackgroundStyle = (preset: 'studio' | 'showroom' | 'sunset' | 'neon') => {
+const getBackgroundStyle = (preset: 'standard' | 'showroom' | 'sunset' | 'neon') => {
   switch (preset) {
-    case 'studio':
-      return 'linear-gradient(180deg, rgba(247, 243, 235, 0.45) 0%, rgba(232, 226, 213, 0.75) 100%)';
+    case 'standard':
+      return 'transparent';
     case 'showroom':
-      return 'linear-gradient(180deg, rgba(228, 222, 211, 0.5) 0%, rgba(200, 191, 176, 0.8) 100%)';
+      return 'linear-gradient(180deg, rgba(228, 222, 211, 0.12) 0%, rgba(200, 191, 176, 0.24) 100%)';
     case 'sunset':
-      return 'linear-gradient(180deg, rgba(252, 224, 199, 0.5) 0%, rgba(243, 166, 131, 0.7) 40%, rgba(87, 75, 144, 0.8) 100%)';
+      return 'linear-gradient(180deg, rgba(252, 224, 199, 0.12) 0%, rgba(243, 166, 131, 0.18) 40%, rgba(87, 75, 144, 0.24) 100%)';
     case 'neon':
-      return 'linear-gradient(180deg, rgba(30, 20, 50, 0.6) 0%, rgba(15, 10, 30, 0.85) 100%)';
+      return 'linear-gradient(180deg, rgba(30, 20, 50, 0.15) 0%, rgba(15, 10, 30, 0.3) 100%)';
   }
 };
 
@@ -150,6 +155,7 @@ export function GarmentPreview3D({
   const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const dirLight1Ref = useRef<THREE.DirectionalLight | null>(null);
   const dirLight2Ref = useRef<THREE.DirectionalLight | null>(null);
+  const spotLightRef = useRef<THREE.SpotLight | null>(null);
 
   // Physics state refs for the inertia fabric swing effect
   const lastAngleRef = useRef<number>(0);
@@ -304,6 +310,15 @@ export function GarmentPreview3D({
     scene.add(dirLight2);
     dirLight2Ref.current = dirLight2;
 
+    const spotLight = new THREE.SpotLight('#ffffff', 0.0, 12.0, Math.PI / 3, 0.8, 1.0);
+    spotLight.position.set(0, 5, 3);
+    spotLight.castShadow = true;
+    spotLight.shadow.mapSize.width = 1024;
+    spotLight.shadow.mapSize.height = 1024;
+    spotLight.shadow.bias = -0.0005;
+    scene.add(spotLight);
+    spotLightRef.current = spotLight;
+
     // Animation Loop
     let animationFrameId: number;
     const animate = () => {
@@ -412,6 +427,7 @@ export function GarmentPreview3D({
       hemiLightRef.current = null;
       dirLight1Ref.current = null;
       dirLight2Ref.current = null;
+      spotLightRef.current = null;
     };
   }, []);
 
@@ -421,68 +437,95 @@ export function GarmentPreview3D({
     const hemi = hemiLightRef.current;
     const dir1 = dirLight1Ref.current;
     const dir2 = dirLight2Ref.current;
-    if (!ambient || !hemi || !dir1 || !dir2) return;
+    const spot = spotLightRef.current;
+    if (!ambient || !hemi || !dir1 || !dir2 || !spot) return;
 
-    if (lightingPreset === 'studio') {
+    if (lightingPreset === 'standard') {
       ambient.color.set('#fffaed');
-      ambient.intensity = 0.5;
+      ambient.intensity = 0.6; // Slightly brighter ambient fill
 
       hemi.color.set('#fffdfa');
-      hemi.groundColor.set('#444444');
-      hemi.intensity = 0.7;
+      hemi.groundColor.set('#555555');
+      hemi.intensity = 0.8; // Clean, natural sky light
 
       dir1.color.set('#fffdf5');
-      dir1.intensity = 0.9;
+      dir1.intensity = 1.1; // Direct daylight key light
       dir1.position.set(5, 10, 7);
 
       dir2.color.set('#e2f1ff');
-      dir2.intensity = 0.4;
+      dir2.intensity = 0.6; // Soft cool rim light from behind
       dir2.position.set(-5, 5, -7);
+
+      spot.intensity = 0.0;
     } else if (lightingPreset === 'showroom') {
-      ambient.color.set('#fffaed');
-      ambient.intensity = 0.6;
+      ambient.color.set('#ffe8cc');
+      ambient.intensity = 0.25;
 
       hemi.color.set('#ffffff');
-      hemi.groundColor.set('#776655');
-      hemi.intensity = 0.5;
+      hemi.groundColor.set('#332211');
+      hemi.intensity = 0.3;
 
       dir1.color.set('#ffeedd');
-      dir1.intensity = 1.2;
-      dir1.position.set(6, 8, 4);
+      dir1.intensity = 0.4; // Soft fill light from front-left
+      dir1.position.set(-4, 3, 5);
 
-      dir2.color.set('#ccddee');
-      dir2.intensity = 0.5;
-      dir2.position.set(-6, 4, -4);
+      dir2.color.set('#ffffff');
+      dir2.intensity = 1.2; // Strong rim light to highlight shoulders and silhouette
+      dir2.position.set(0, 5, -8);
+
+      spot.color.set('#ffffff');
+      spot.intensity = 7.0; // Highly focused theatrical gallery spotlight
+      spot.position.set(0, 7, 2);
+      spot.distance = 15.0;
+      spot.angle = Math.PI / 6; // Narrow beam
+      spot.penumbra = 0.8;      // Smooth borders
+      spot.decay = 1.2;         // Realistic light falloff
     } else if (lightingPreset === 'sunset') {
-      ambient.color.set('#ffebd1');
-      ambient.intensity = 0.4;
+      ambient.color.set('#ffe0c0');
+      ambient.intensity = 0.15;
 
-      hemi.color.set('#ffd3b6');
-      hemi.groundColor.set('#3c2010');
-      hemi.intensity = 0.4;
+      hemi.color.set('#ffc899');
+      hemi.groundColor.set('#20150d');
+      hemi.intensity = 0.2;
 
-      dir1.color.set('#ffa64d');
-      dir1.intensity = 1.6;
-      dir1.position.set(10, 3, 5);
+      dir1.color.set('#ff7315');
+      dir1.intensity = 2.5; // Low-angle intense golden sunset sun
+      dir1.position.set(10, 2.0, 4);
 
-      dir2.color.set('#7080a0');
-      dir2.intensity = 0.5;
-      dir2.position.set(-8, 5, -6);
+      dir2.color.set('#4b6584');
+      dir2.intensity = 0.8; // Cool blue/indigo sky fill from shadow side
+      dir2.position.set(-10, 4, 3);
+
+      spot.color.set('#ffa502'); // Golden rim spotlight highlighting edges
+      spot.intensity = 6.0;
+      spot.position.set(-5, 4, -8);
+      spot.distance = 15.0;
+      spot.angle = Math.PI / 4;
+      spot.penumbra = 0.7;
+      spot.decay = 1.0;
     } else if (lightingPreset === 'neon') {
-      ambient.color.set('#15102a');
-      ambient.intensity = 0.3;
+      ambient.color.set('#0a0518');
+      ambient.intensity = 0.2;
 
       hemi.color.set('#00ffff');
       hemi.groundColor.set('#ff00ff');
-      hemi.intensity = 0.2;
+      hemi.intensity = 0.1;
 
       dir1.color.set('#00f0ff');
-      dir1.intensity = 1.5;
-      dir1.position.set(5, 5, 6);
+      dir1.intensity = 1.4; // Toned down cyan key light
+      dir1.position.set(5, 4, 5);
 
-      dir2.color.set('#ff00d0');
-      dir2.intensity = 1.2;
-      dir2.position.set(-5, 3, -6);
+      dir2.color.set('#ff00bb');
+      dir2.intensity = 1.0; // Toned down magenta fill light
+      dir2.position.set(-5, 3, 5);
+
+      spot.color.set('#ff00ff'); // Hot magenta rim light from behind
+      spot.intensity = 3.5; // Toned down spotlight
+      spot.position.set(0, 5, -7);
+      spot.distance = 15.0;
+      spot.angle = Math.PI / 3;
+      spot.penumbra = 0.6;
+      spot.decay = 1.0;
     }
   }, [lightingPreset]);
 
@@ -547,6 +590,7 @@ export function GarmentPreview3D({
     shaderUniformsRef.current.forEach((uni) => {
       if (uni.uWeaveScale) uni.uWeaveScale.value = settings.uWeaveScale;
       if (uni.uWeaveWeight) uni.uWeaveWeight.value = settings.uWeaveWeight;
+      if (uni.uWeaveType) uni.uWeaveType.value = settings.uWeaveType;
       if (uni.uBleedThrough) uni.uBleedThrough.value = settings.uBleedThrough;
     });
   }, [materialPreset, loading]);
@@ -626,7 +670,10 @@ export function GarmentPreview3D({
 
         // 3. Scale the model so its max dimension is targetSize
         const maxDim = Math.max(size.x, size.y, size.z);
-        const targetSize = 1.6; // 1.6 leaves a nice ~10% padding on top and bottom
+        let targetSize = 1.6; // 1.6 leaves a nice ~10% padding on top and bottom
+        if (modelUrl.toLowerCase().includes('midi-dress') || modelUrl.toLowerCase().includes('midikleid')) {
+          targetSize = 1.85;
+        }
         const scaleFactor = maxDim > 0 ? targetSize / maxDim : 1.0;
         model.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
@@ -691,6 +738,7 @@ export function GarmentPreview3D({
             // Adjust material for better texture display
             const isArray = Array.isArray(mesh.material);
             const materials = isArray ? (mesh.material as THREE.Material[]) : [mesh.material as THREE.Material];
+            console.log("Mesh child:", mesh.name, "isArray:", isArray, "materials:", materials.map(m => m.constructor.name));
             const newMaterials = materials.map((mat) => {
               if (mat instanceof THREE.MeshStandardMaterial) {
                 const name = (mat.name || mesh.name || '').toLowerCase();
@@ -727,6 +775,7 @@ export function GarmentPreview3D({
                   const customUniforms = {
                     uWeaveScale: { value: 4000.0 },
                     uWeaveWeight: { value: 0.01 },
+                    uWeaveType: { value: 0.0 },
                     uBleedThrough: { value: 0.18 },
                     uInertia: { value: 0.0 },
                     uMinY: { value: localMinY },
@@ -735,20 +784,78 @@ export function GarmentPreview3D({
                   shaderUniformsRef.current.push(customUniforms);
 
                   physicalMat.onBeforeCompile = (shader) => {
+                    console.log("onBeforeCompile is running!");
                     // Inject uniforms
                     shader.uniforms.uWeaveScale = customUniforms.uWeaveScale;
                     shader.uniforms.uWeaveWeight = customUniforms.uWeaveWeight;
+                    shader.uniforms.uWeaveType = customUniforms.uWeaveType;
                     shader.uniforms.uBleedThrough = customUniforms.uBleedThrough;
                     shader.uniforms.uInertia = customUniforms.uInertia;
                     shader.uniforms.uMinY = customUniforms.uMinY;
                     shader.uniforms.uMaxY = customUniforms.uMaxY;
 
-                    // Add uniforms declarations at the top of fragment shader
-                    shader.fragmentShader = `
-                      uniform float uWeaveScale;
-                      uniform float uWeaveWeight;
-                      uniform float uBleedThrough;
-                    ` + shader.fragmentShader;
+                    // Inject uniforms and functions into fragment shader
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                      '#include <common>',
+                      `#include <common>
+                       uniform float uWeaveScale;
+                       uniform float uWeaveWeight;
+                       uniform float uWeaveType;
+                       uniform float uBleedThrough;
+
+                       float getFabricHeight(vec2 uv, float scale, float weight, float type) {
+                         vec2 p = uv * scale;
+                         if (type > 1.5) { // Sport
+                           vec2 f = fract(p) - 0.5;
+                           float d = length(f);
+                           return (1.0 - smoothstep(0.15, 0.45, d)) * 2.0 - 1.0;
+                         } else if (type > 0.5) { // Linen
+                           float irregularity = sin(uv.x * 25.0) * sin(uv.y * 33.0) * 0.2 + 1.0;
+                           vec2 pIrreg = p * vec2(irregularity, 1.0 / irregularity);
+                           vec2 i = floor(pIrreg);
+                           vec2 f = fract(pIrreg);
+                           bool isWarp = mod(i.x + i.y, 2.0) < 0.5;
+                           if (isWarp) {
+                             return sin(f.x * 3.14159) * (0.4 + 0.6 * sin(f.y * 3.14159));
+                           } else {
+                             return sin(f.y * 3.14159) * (0.4 + 0.6 * sin(f.x * 3.14159));
+                           }
+                         } else { // Standard / Silk
+                           vec2 i = floor(p);
+                           vec2 f = fract(p);
+                           bool isWarp = mod(i.x + i.y, 2.0) < 0.5;
+                           if (isWarp) {
+                             return sin(f.x * 3.14159) * (0.5 + 0.5 * sin(f.y * 3.14159));
+                           } else {
+                             return sin(f.y * 3.14159) * (0.5 + 0.5 * sin(f.x * 3.14159));
+                           }
+                         }
+                       }`
+                    );
+
+                    // Replace normal_fragment_begin to inject procedural weave bump mapping
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                      '#include <normal_fragment_begin>',
+                      `#include <normal_fragment_begin>
+                       #ifdef USE_MAP
+                       if ( gl_FrontFacing ) {
+                         float dist = length(vViewPosition);
+                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
+
+                         float stepSize = 0.5 / uWeaveScale;
+                         float h = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType);
+                         float h_dx = getFabricHeight(vMapUv + vec2(stepSize, 0.0), uWeaveScale, uWeaveWeight, uWeaveType);
+                         float h_dy = getFabricHeight(vMapUv + vec2(0.0, stepSize), uWeaveScale, uWeaveWeight, uWeaveType);
+                         float derivX = (h_dx - h) * uWeaveWeight * 15.0 * fade;
+                         float derivY = (h_dy - h) * uWeaveWeight * 15.0 * fade;
+                         vec3 helper = abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+                         vec3 tangent = normalize(cross(normal, helper));
+                         vec3 bitangent = normalize(cross(normal, tangent));
+                         // Perturb the surface normal
+                         normal = normalize(normal + (tangent * derivX + bitangent * derivY) * 0.25);
+                       }
+                       #endif`
+                    );
 
                     // Replace lining / color_fragment & add front-face weave color shading
                     shader.fragmentShader = shader.fragmentShader.replace(
@@ -756,7 +863,11 @@ export function GarmentPreview3D({
                       `#include <color_fragment>
                        #ifdef DOUBLE_SIDED
                        #ifdef USE_MAP
-                         float weave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                       {
+                         float dist = length(vViewPosition);
+                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
+
+                         float weave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade;
                          if ( ! gl_FrontFacing ) {
                            vec3 liningBase = vec3(0.95, 0.94, 0.92) + (weave * 0.5) * uWeaveWeight;
                            diffuseColor.rgb = mix(liningBase, diffuseColor.rgb, uBleedThrough);
@@ -764,6 +875,7 @@ export function GarmentPreview3D({
                            // Outside: subtle micro-weave shadow for tactile depth
                            diffuseColor.rgb *= (1.0 - uWeaveWeight * 0.4) + (weave * 0.5) * uWeaveWeight * 0.8;
                          }
+                       }
                        #else
                          if ( ! gl_FrontFacing ) {
                            diffuseColor.rgb = vec3(0.95, 0.94, 0.92);
@@ -777,18 +889,25 @@ export function GarmentPreview3D({
                       '#include <roughnessmap_fragment>',
                       `#include <roughnessmap_fragment>
                        #ifdef USE_MAP
+                       {
+                         float dist = length(vViewPosition);
+                         float fade = 1.0 - smoothstep(1.5, 3.2, dist);
+
                          // Add micro-weave roughness variation
-                         float microWeave = sin(vMapUv.x * uWeaveScale) * sin(vMapUv.y * uWeaveScale);
+                         float microWeave = getFabricHeight(vMapUv, uWeaveScale, uWeaveWeight, uWeaveType) * fade;
                          roughnessFactor = clamp(roughnessFactor + microWeave * uWeaveWeight * 2.0, 0.05, 1.0);
+                       }
                        #endif`
                     );
 
-                    // Add uniforms declarations at the top of vertex shader
-                    shader.vertexShader = `
-                      uniform float uInertia;
-                      uniform float uMinY;
-                      uniform float uMaxY;
-                    ` + shader.vertexShader;
+                    // Add uniforms declarations inside vertex shader by replacing '#include <common>'
+                    shader.vertexShader = shader.vertexShader.replace(
+                      '#include <common>',
+                      `#include <common>
+                       uniform float uInertia;
+                       uniform float uMinY;
+                       uniform float uMaxY;`
+                    );
 
                     // Replace begin_vertex
                     shader.vertexShader = shader.vertexShader.replace(
