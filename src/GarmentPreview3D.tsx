@@ -127,6 +127,18 @@ export function GarmentPreview3D({
               if (!isAccessory) {
                 mat.map = canvasTexture;
                 mat.color.setHex(0xffffff);
+                mat.side = THREE.DoubleSide;
+                mat.onBeforeCompile = (shader) => {
+                  shader.fragmentShader = shader.fragmentShader.replace(
+                    'vec4 diffuseColor = vec4( diffuse, opacity );',
+                    `vec4 diffuseColor = vec4( diffuse, opacity );
+                     #ifdef DOUBLE_SIDED
+                     if ( ! gl_FrontFacing ) {
+                       diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
+                     }
+                     #endif`
+                  );
+                };
                 mat.needsUpdate = true;
               }
             }
@@ -350,6 +362,42 @@ export function GarmentPreview3D({
               if (mat instanceof THREE.MeshStandardMaterial) {
                 mat.roughness = 0.85; // Fabric is rough
                 mat.metalness = 0.1;  // Fabric is non-metallic
+
+                const name = (mat.name || mesh.name || '').toLowerCase();
+                const isAccessory =
+                  name.includes('button') ||
+                  name.includes('zipper') ||
+                  name.includes('belt') ||
+                  name.includes('metal') ||
+                  name.includes('buckle') ||
+                  name.includes('hardware') ||
+                  name.includes('eyelet') ||
+                  name.includes('sole') ||
+                  name.includes('shoe') ||
+                  name.includes('knopf') ||
+                  name.includes('reissverschluss') ||
+                  name.includes('guertel') ||
+                  name.includes('lining') ||
+                  name.includes('futter') ||
+                  name.includes('inside') ||
+                  name.includes('inner') ||
+                  name.includes('mannequin') ||
+                  name.includes('body');
+
+                if (!isAccessory) {
+                  mat.side = THREE.DoubleSide;
+                  mat.onBeforeCompile = (shader) => {
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                      'vec4 diffuseColor = vec4( diffuse, opacity );',
+                      `vec4 diffuseColor = vec4( diffuse, opacity );
+                       #ifdef DOUBLE_SIDED
+                       if ( ! gl_FrontFacing ) {
+                         diffuseColor.rgb = vec3( 0.95, 0.94, 0.92 );
+                       }
+                       #endif`
+                    );
+                  };
+                }
               }
             });
           }

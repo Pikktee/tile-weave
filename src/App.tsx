@@ -47,7 +47,7 @@ const RotateIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
-type GarmentType = 'hose' | 'kleid' | 'midikleid' | 'custom';
+type GarmentType = 'hose' | 'kleid' | 'midikleid' | 'hoodie' | 'custom';
 
 type PatternSettings = {
   density: number;
@@ -234,6 +234,11 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
     label: 'Midikleid',
     description: 'Tailliertes Midikleid mit weitem Rockfall',
     modelPath: '/models/midi-dress.glb',
+  },
+  hoodie: {
+    label: 'Hoodie',
+    description: 'Sportlicher Kapuzenpullover für Allover-Prints',
+    modelPath: '/models/hoodie.glb',
   },
   custom: {
     label: 'Eigene',
