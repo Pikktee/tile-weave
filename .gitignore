@@ -1,6 +1,7 @@
 node_modules
 dist
 artifacts
+incoming/
 .env
 .env.local
 .DS_Store
