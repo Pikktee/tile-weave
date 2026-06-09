@@ -960,6 +960,7 @@ function App() {
       const url = URL.createObjectURL(file);
       setCustomModelUrl(url);
       setGarmentType('custom');
+      setPreviewTransform(initialPanZoom);
     }
   };
 
@@ -1206,12 +1207,14 @@ function App() {
         setShowUploadModal(true);
       } else {
         setGarmentType('custom');
+        setPreviewTransform(initialPanZoom);
       }
       setIsGarmentDropdownOpen(false);
       return;
     }
 
     setGarmentType(nextType);
+    setPreviewTransform(initialPanZoom);
     setIsGarmentDropdownOpen(false);
     if (customModelUrl) {
       URL.revokeObjectURL(customModelUrl);

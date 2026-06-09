@@ -339,7 +339,7 @@ export function GarmentPreview3D({
         // Adjust camera position & target based on model size
         if (cameraRef.current && controlsRef.current) {
           controlsRef.current.target.set(0, 0, 0);
-          cameraRef.current.position.set(0, 0.2, 2.4);
+          cameraRef.current.position.set(0, 0, 2.4);
           controlsRef.current.update();
         }
 
@@ -471,7 +471,7 @@ export function GarmentPreview3D({
   useEffect(() => {
     if (resetTrigger > 0 && cameraRef.current && controlsRef.current) {
       controlsRef.current.target.set(0, 0, 0);
-      cameraRef.current.position.set(0, 0.2, 2.4);
+      cameraRef.current.position.set(0, 0, 2.4);
       controlsRef.current.update();
       onResetCompleted();
     }
