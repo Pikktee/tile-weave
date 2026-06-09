@@ -47,7 +47,7 @@ const RotateIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
-type GarmentType = 'hose' | 'kleid' | 'custom';
+type GarmentType = 'hose' | 'kleid' | 'midikleid' | 'custom';
 
 type PatternSettings = {
   density: number;
@@ -229,6 +229,11 @@ const garmentTypes: Record<GarmentType, { label: string; description: string; mo
     label: 'Kleid',
     description: 'Stofffall und Flächenwirkung prüfen',
     modelPath: '/models/custom-summer-dress-new-uv.glb',
+  },
+  midikleid: {
+    label: 'Midikleid',
+    description: 'Tailliertes Midikleid mit weitem Rockfall',
+    modelPath: '/models/midi-dress.glb',
   },
   custom: {
     label: 'Eigene',
@@ -899,7 +904,11 @@ function App() {
     () => !pathToLegalPage(window.location.pathname) && (!restored || pathToView(window.location.pathname) === null),
   );
   const [garmentType, setGarmentType] = useState<GarmentType>(() => {
-    if (restored?.garmentType === 'hose' || restored?.garmentType === 'kleid') {
+    if (
+      restored?.garmentType === 'hose' ||
+      restored?.garmentType === 'kleid' ||
+      restored?.garmentType === 'midikleid'
+    ) {
       return restored.garmentType;
     }
     return 'hose';
