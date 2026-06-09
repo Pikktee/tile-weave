@@ -499,6 +499,101 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+
+.start-legal-links,
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.start-legal-links a,
+.legal-links a {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 4px;
+  transition: color 160ms ease;
+}
+
+.start-legal-links a:hover,
+.start-legal-links a:focus-visible,
+.legal-links a:hover,
+.legal-links a:focus-visible,
+.legal-links a[aria-current="page"] {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.legal-mode {
+  display: grid;
+  place-items: start center;
+  padding-top: clamp(24px, 6vh, 58px);
+}
+
+.legal-page {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+.legal-brand {
+  justify-self: center;
+}
+
+.legal-card {
+  display: grid;
+  gap: 22px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: clamp(22px, 4vw, 36px);
+  background: rgba(255, 252, 246, 0.86);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.legal-kicker {
+  margin: 0 0 -12px;
+  color: var(--teal);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.legal-card h1 {
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1.05;
+}
+
+.legal-card section {
+  display: grid;
+  gap: 7px;
+}
+
+.legal-card h2 {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.legal-card p,
+.legal-card address {
+  margin: 0;
+  color: var(--muted);
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.legal-card code {
+  border-radius: 7px;
+  padding: 1px 5px;
+  color: var(--ink);
+  background: rgba(25, 23, 22, 0.06);
+}
+
 .panel,
 .preview-stage {
   min-height: 690px;

@@ -52,6 +52,7 @@ type Version = {
 type ViewMode = 'stoffbahn' | 'kleidung' | 'kachel';
 type GenerationMode = 'initial' | 'refine';
 type ImageModelKey = 'z-image' | 'flux-seamless' | 'gpt-image-2' | 'qwen-pro';
+type LegalPage = 'impressum' | 'datenschutz';
 type PanZoomState = {
   x: number;
   y: number;
@@ -115,6 +116,13 @@ const PATH_TO_VIEW: Record<string, ViewMode> = {
   '/kleidung': 'kleidung',
 };
 const pathToView = (pathname: string): ViewMode | null => PATH_TO_VIEW[pathname] ?? null;
+const viewModeLabel = (mode: ViewMode) =>
+  mode === 'kachel' ? 'Nahtprüfung' : mode === 'stoffbahn' ? 'Stoffbahn' : 'Kleidung';
+const LEGAL_PATH_TO_PAGE: Record<string, LegalPage> = {
+  '/impressum': 'impressum',
+  '/datenschutz': 'datenschutz',
+};
+const pathToLegalPage = (pathname: string): LegalPage | null => LEGAL_PATH_TO_PAGE[pathname] ?? null;
 
 // Session-Persistenz: nur sessionStorage (pro Tab, beim Schliessen geleert),
 // damit Reload den Arbeitsstand wiederherstellt, ohne Daten dauerhaft zu speichern.
@@ -784,16 +792,191 @@ function MosaicThumb() {
   );
 }
 
+
+function LegalPageView({
+  page,
+  onNavigateHome,
+  onNavigateLegal,
+}: {
+  page: LegalPage;
+  onNavigateHome: () => void;
+  onNavigateLegal: (page: LegalPage) => void;
+}) {
+  return (
+    <main className="app-shell legal-mode">
+      <article className="legal-page">
+        <a
+          className="brand legal-brand"
+          href="/"
+          aria-label="Tile Weave Start"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigateHome();
+          }}
+        >
+          <img src="/logo.svg" alt="" />
+          <span>
+            <strong>Tile Weave</strong>
+          </span>
+        </a>
+
+        {page === 'impressum' ? (
+          <div className="legal-card">
+            <p className="legal-kicker">Rechtliches</p>
+            <h1>Impressum</h1>
+
+            <section>
+              <h2>Angaben gemäß § 5 DDG</h2>
+              <address>
+                Henrik Heil
+                <br />
+                Westendstraße 100
+                <br />
+                60325 Frankfurt
+                <br />
+                Deutschland
+              </address>
+            </section>
+
+            <section>
+              <h2>Verantwortlich für den Inhalt</h2>
+              <p>
+                Henrik Heil
+                <br />
+                Westendstraße 100
+                <br />
+                60325 Frankfurt
+              </p>
+            </section>
+
+            <section>
+              <h2>Hinweis</h2>
+              <p>
+                Tile Weave ist ein lokales Arbeitswerkzeug zur KI-gestützten Erstellung und Prüfung
+                von Stoffmuster-Kacheln. Die erzeugten Muster sind Entwurfs- und Prüfansichten und
+                keine druckverbindlichen Produktionsdaten.
+              </p>
+            </section>
+          </div>
+        ) : (
+          <div className="legal-card">
+            <p className="legal-kicker">Rechtliches</p>
+            <h1>Datenschutzerklärung</h1>
+
+            <section>
+              <h2>Verantwortlicher</h2>
+              <p>
+                Henrik Heil
+                <br />
+                Westendstraße 100
+                <br />
+                60325 Frankfurt
+                <br />
+                Deutschland
+              </p>
+            </section>
+
+            <section>
+              <h2>Welche Daten verarbeitet werden</h2>
+              <p>
+                Wenn du mit Tile Weave ein Muster erzeugst, werden deine eingegebenen Prompt-Texte,
+                die gewählten Mustereinstellungen, das ausgewählte Bildmodell und die erzeugten
+                Bilddaten verarbeitet. Technisch können außerdem Verbindungsdaten wie IP-Adresse,
+                Zeitpunkt der Anfrage und Browser-Informationen anfallen.
+              </p>
+            </section>
+
+            <section>
+              <h2>Zweck der Verarbeitung</h2>
+              <p>
+                Die Daten werden verarbeitet, um aus deiner Musteridee eine KI-generierte
+                Stoffmuster-Kachel zu erstellen, Varianten zu erzeugen, die Nahtprüfung darzustellen
+                und den Arbeitsstand im aktuellen Browser-Tab wiederherzustellen.
+              </p>
+            </section>
+
+            <section>
+              <h2>KI-Dienstleister</h2>
+              <p>
+                Für die Bildgenerierung sendet der Server die notwendigen Eingaben an fal.ai.
+                Prompt-Anpassungen können zur Übersetzung und Strukturierung über OpenRouter
+                verarbeitet werden. Bitte gib keine vertraulichen, besonders schützenswerten oder
+                personenbezogenen Inhalte in Muster-Prompts ein, wenn sie nicht für diese
+                Verarbeitung bestimmt sind.
+              </p>
+            </section>
+
+            <section>
+              <h2>Lokale Speicherung</h2>
+              <p>
+                Tile Weave nutzt <code>sessionStorage</code>, um den Arbeitsstand pro Browser-Tab zu
+                merken. Dazu gehören die aktive Kachel, Versionen, Einstellungen und Prompt-Daten.
+                Diese Daten werden nicht dauerhaft im Browser gespeichert und beim Schließen des Tabs
+                gelöscht. Mit „Neue Idee“ wird der lokale Sitzungsstand ebenfalls verworfen.
+              </p>
+            </section>
+
+            <section>
+              <h2>Rechtsgrundlage und Speicherdauer</h2>
+              <p>
+                Die Verarbeitung erfolgt zur Bereitstellung der gewünschten Funktion und auf Grundlage
+                berechtigter Interessen an einem funktionsfähigen, sicheren Dienst. Lokale Sitzungsdaten
+                bleiben nur für die Dauer des geöffneten Tabs erhalten. Server- und Dienstleisterdaten
+                werden nur so lange verarbeitet, wie es für Generierung, Betrieb und Fehleranalyse
+                erforderlich ist.
+              </p>
+            </section>
+
+            <section>
+              <h2>Deine Rechte</h2>
+              <p>
+                Du hast nach Maßgabe der Datenschutzgesetze insbesondere Rechte auf Auskunft,
+                Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und
+                Widerspruch. Außerdem kannst du dich bei einer zuständigen Datenschutzaufsichtsbehörde
+                beschweren.
+              </p>
+            </section>
+          </div>
+        )}
+
+        <nav className="legal-links" aria-label="Rechtliche Seiten">
+          <a
+            href="/impressum"
+            aria-current={page === 'impressum' ? 'page' : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigateLegal('impressum');
+            }}
+          >
+            Impressum
+          </a>
+          <a
+            href="/datenschutz"
+            aria-current={page === 'datenschutz' ? 'page' : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              onNavigateLegal('datenschutz');
+            }}
+          >
+            Datenschutzerklärung
+          </a>
+        </nav>
+      </article>
+    </main>
+  );
+}
+
 function App() {
   // Einmalig aus sessionStorage wiederherstellen (oder null bei frischer Sitzung).
   const [restored] = useState<SessionSnapshot | null>(() => loadSession());
+  const [legalPage, setLegalPage] = useState<LegalPage | null>(() => pathToLegalPage(window.location.pathname));
   const [settings, setSettings] = useState<PatternSettings>(() => restored?.settings ?? initialSettings);
   const [viewMode, setViewMode] = useState<ViewMode>(
     () => pathToView(window.location.pathname) ?? restored?.viewMode ?? 'kachel',
   );
   // Startseite zeigen, wenn keine Sitzung wiederhergestellt wurde oder die URL '/' ist.
   const [atStart, setAtStart] = useState<boolean>(
-    () => !restored || pathToView(window.location.pathname) === null,
+    () => !pathToLegalPage(window.location.pathname) && (!restored || pathToView(window.location.pathname) === null),
   );
   const [garmentType, setGarmentType] = useState<GarmentType>(() => restored?.garmentType ?? 'hemd');
   const [tileImage, setTileImage] = useState(() => restored?.tileImage ?? '');
@@ -860,6 +1043,12 @@ function App() {
   // Zurueck/Vor des Browsers: Ansicht bzw. Startseite aus der URL uebernehmen.
   useEffect(() => {
     const handlePopState = () => {
+      const nextLegalPage = pathToLegalPage(window.location.pathname);
+      setLegalPage(nextLegalPage);
+      if (nextLegalPage) {
+        setAtStart(false);
+        return;
+      }
       const mode = pathToView(window.location.pathname);
       if (mode) {
         setAtStart(false);
@@ -872,6 +1061,18 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (legalPage === 'impressum') {
+      document.title = 'Impressum | Tile Weave';
+      return;
+    }
+    if (legalPage === 'datenschutz') {
+      document.title = 'Datenschutzerklärung | Tile Weave';
+      return;
+    }
+    document.title = atStart || !hasTile ? 'Tile Weave' : `${viewModeLabel(viewMode)} | Tile Weave`;
+  }, [atStart, hasTile, legalPage, viewMode]);
 
   // Arbeitsstand in sessionStorage spiegeln, damit ein Reload ihn wiederherstellt.
   useEffect(() => {
@@ -973,8 +1174,26 @@ function App() {
     }
   };
 
+  const navigateHome = () => {
+    setLegalPage(null);
+    setAtStart(true);
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
+  };
+
+  const navigateToLegalPage = (page: LegalPage) => {
+    const path = page === 'impressum' ? '/impressum' : '/datenschutz';
+    setLegalPage(page);
+    setAtStart(false);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+  };
+
   // Beim Wechsel des Bereichs Zoom/Pan auf 100 % zuruecksetzen.
   const changeViewMode = (mode: ViewMode) => {
+    setLegalPage(null);
     setViewMode(mode);
     setAtStart(false);
     setPreviewTransform(initialPanZoom);
@@ -1185,6 +1404,7 @@ function App() {
     setActiveVersionId('');
     setViewMode('kachel');
     setAtStart(true);
+    setLegalPage(null);
     setPreviewTool('pan');
     setPreviewTransform(initialPanZoom);
     setGenerationMode('initial');
@@ -1435,6 +1655,16 @@ function App() {
     }
   };
 
+  if (legalPage) {
+    return (
+      <LegalPageView
+        page={legalPage}
+        onNavigateHome={navigateHome}
+        onNavigateLegal={navigateToLegalPage}
+      />
+    );
+  }
+
   if (atStart || !hasTile) {
     return (
       <main className="app-shell start-mode">
@@ -1505,6 +1735,26 @@ function App() {
             )}
             {isGenerating && <LoadingOverlay mode="initial" imageModel={imageModel} />}
           </form>
+          <nav className="start-legal-links" aria-label="Rechtliche Seiten">
+            <a
+              href="/impressum"
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToLegalPage('impressum');
+              }}
+            >
+              Impressum
+            </a>
+            <a
+              href="/datenschutz"
+              onClick={(event) => {
+                event.preventDefault();
+                navigateToLegalPage('datenschutz');
+              }}
+            >
+              Datenschutzerklärung
+            </a>
+          </nav>
         </section>
       </main>
     );
