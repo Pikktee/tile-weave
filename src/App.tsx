@@ -263,30 +263,38 @@ const initialSettings: PatternSettings = {
 
 // Auswaehlbare Bild-KI-Modelle (Reihenfolge = Anzeige im Startscreen). `tiling: true`
 // = nativ randmatchende Kacheln; bei `false` ehrlich als "kann Naehte zeigen" markieren.
+// `seamTip` erklaert den Naht-Status laienverstaendlich im Tooltip am Status-Symbol.
 // Schluessel muessen mit der Server-Registry (IMAGE_MODELS in server/index.mjs) uebereinstimmen.
 const IMAGE_MODELS: {
   key: ImageModelKey;
   label: string;
   hint: string;
   tiling: boolean;
+  seamTip: string;
 }[] = [
   {
     key: 'z-image',
     label: 'Z-Image Turbo',
-    hint: 'Schnell, auf nahtlose Kacheln spezialisiert.',
+    hint: 'Schnell und verlässlich – ideal für den ersten Entwurf.',
     tiling: true,
+    seamTip:
+      'Erzeugt Muster, die ringsum ohne sichtbare Naht aneinanderpassen. Der Rapport schließt direkt sauber.',
   },
   {
     key: 'flux-seamless',
     label: 'FLUX.1 Seamless',
-    hint: 'Mehr Detailtiefe, ebenfalls nahtlos via LoRA.',
+    hint: 'Feinere Details und mehr Struktur im Muster.',
     tiling: true,
+    seamTip:
+      'Erzeugt Muster, die ringsum ohne sichtbare Naht aneinanderpassen. Der Rapport schließt direkt sauber.',
   },
   {
     key: 'gpt-image-2',
     label: 'GPT Image 2',
-    hint: 'Top-Qualität von OpenAI, ohne natives Tiling.',
+    hint: 'Besonders hohe Bildqualität – Naht vorher kurz prüfen.',
     tiling: false,
+    seamTip:
+      'Kann an den Kachelrändern sichtbare Nähte erzeugen. Ergebnis vor dem Druck in der Nahtprüfung kontrollieren.',
   },
 ];
 
@@ -1799,15 +1807,27 @@ function App() {
                     type="button"
                     role="radio"
                     aria-checked={imageModel === model.key}
+                    aria-label={`${model.label}. ${
+                      model.tiling ? 'Nahtlos kachelbar' : 'Naht prüfen'
+                    }. ${model.hint}`}
                     className={`model-option${imageModel === model.key ? ' active' : ''}`}
                     onClick={() => setImageModel(model.key)}
                     disabled={isGenerating}
                   >
-                    <span className="model-option__name">{model.label}</span>
-                    <span className={`model-option__badge${model.tiling ? '' : ' model-option__badge--warn'}`}>
-                      {model.tiling ? <Grid size={12} aria-hidden="true" /> : <TriangleAlert size={12} aria-hidden="true" />}
-                      <span>{model.tiling ? 'Rapport-sicher' : 'Nahtprüfung nötig'}</span>
+                    <span
+                      className={`model-option__seam${model.tiling ? '' : ' model-option__seam--warn'}`}
+                    >
+                      {model.tiling ? (
+                        <Check size={14} aria-hidden="true" strokeWidth={2.75} />
+                      ) : (
+                        <TriangleAlert size={13} aria-hidden="true" />
+                      )}
+                      <span className="model-option__seam-tip" role="tooltip">
+                        <strong>{model.tiling ? 'Nahtlos kachelbar' : 'Naht prüfen'}</strong>
+                        {model.seamTip}
+                      </span>
                     </span>
+                    <span className="model-option__name">{model.label}</span>
                     <span className="model-option__hint">{model.hint}</span>
                   </button>
                 ))}

@@ -460,13 +460,14 @@ textarea:focus-visible {
 }
 
 .model-option {
+  position: relative;
   display: grid;
   gap: 5px;
   align-content: start;
   min-height: 92px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 12px;
+  padding: 12px 40px 12px 12px;
   color: var(--ink);
   text-align: left;
   background: rgba(255, 255, 255, 0.58);
@@ -498,42 +499,95 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
-.model-option__badge {
+/* Dezenter, rein symbolischer Naht-Status oben rechts in der Karte.
+   Gruener Haken = nahtlos kachelbar, gelbes Warndreieck = Naht pruefen.
+   Details kommen laienverstaendlich aus dem Hover-/Fokus-Tooltip. */
+.model-option__seam {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  justify-self: start;
-  min-height: 24px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  padding: 3px 8px 3px 6px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1;
-  color: rgba(14, 102, 98, 0.92);
-  background: rgba(33, 168, 163, 0.09);
-  box-shadow: inset 0 0 0 1px rgba(33, 168, 163, 0.12);
-}
-
-.model-option__badge svg {
-  flex: none;
-  opacity: 0.78;
-}
-
-.model-option__badge--warn {
-  color: rgba(138, 93, 29, 0.94);
-  background: rgba(247, 214, 107, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(180, 134, 40, 0.14);
-}
-
-.model-option.active .model-option__badge {
+  color: rgba(14, 102, 98, 0.95);
   background: rgba(33, 168, 163, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(33, 168, 163, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(33, 168, 163, 0.22);
 }
 
-.model-option.active .model-option__badge--warn {
-  background: rgba(247, 214, 107, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(180, 134, 40, 0.18);
+.model-option__seam svg {
+  flex: none;
+}
+
+.model-option__seam--warn {
+  color: rgba(150, 100, 24, 0.96);
+  background: rgba(247, 214, 107, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(180, 134, 40, 0.28);
+}
+
+.model-option.active .model-option__seam {
+  background: rgba(33, 168, 163, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(33, 168, 163, 0.32);
+}
+
+.model-option.active .model-option__seam--warn {
+  background: rgba(247, 214, 107, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(180, 134, 40, 0.38);
+}
+
+/* Tooltip-Popup am Status-Symbol */
+.model-option__seam-tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -6px;
+  z-index: 5;
+  display: grid;
+  gap: 3px;
+  width: 220px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: var(--dark);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    visibility 150ms ease;
+  pointer-events: none;
+  box-shadow: 0 12px 28px rgba(20, 16, 14, 0.22);
+}
+
+.model-option__seam-tip strong {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.model-option__seam-tip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  background: var(--dark);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+.model-option__seam:hover .model-option__seam-tip,
+.model-option:focus-visible .model-option__seam-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .model-option__hint {
