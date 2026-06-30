@@ -146,6 +146,12 @@ export function GarmentPreview3D({
   const isProgrammaticRef = useRef<boolean>(false);
   const textureTransformRef = useRef({ repeatSize, offsetX, offsetY });
 
+  // On-demand rendering control
+  const renderRequestedRef = useRef<boolean>(true);
+  const requestRender = useCallback(() => {
+    renderRequestedRef.current = true;
+  }, []);
+
   const [isRotating, setIsRotating] = useState<boolean>(false);
   const isRotatingRef = useRef<boolean>(false);
   useEffect(() => {
@@ -243,10 +249,11 @@ export function GarmentPreview3D({
           });
         }
       });
+      requestRender();
     } catch (e) {
       console.error('Error applying pattern texture to 3D model:', e);
     }
-  }, [image, imageFilter]);
+  }, [image, imageFilter, requestRender]);
 
   // 1. Initialize Scene, Camera, Renderer, Lights, and OrbitControls
   useEffect(() => {
@@ -272,6 +279,8 @@ export function GarmentPreview3D({
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     // Premium lighting and tone mapping settings
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -328,16 +337,32 @@ export function GarmentPreview3D({
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       
+      const now = performance.now();
+      const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1); // clamp to max 100ms
+      lastTimeRef.current = now;
+
       const cam = cameraRef.current;
       const ctrl = controlsRef.current;
       const modelGroup = modelGroupRef.current;
 
+      let needsRender = false;
+
       // Rotate model if autoplay is enabled
       if (modelGroup && isRotatingRef.current) {
         modelGroup.rotation.y += 0.005;
+        needsRender = true;
+        if (rendererRef.current) {
+          rendererRef.current.shadowMap.needsUpdate = true;
+        }
       }
 
       if (cam && ctrl) {
+        // OrbitControls update returns true if it changed the camera position/orientation (e.g. damping)
+        const controlsChanged = ctrl.update();
+        if (controlsChanged) {
+          needsRender = true;
+        }
+
         const targetDistance = targetDistanceRef.current;
         const currentDistance = cam.position.distanceTo(ctrl.target);
         
@@ -353,25 +378,21 @@ export function GarmentPreview3D({
           programmaticChange = true;
           isProgrammaticRef.current = true;
           cam.position.copy(ctrl.target).addScaledVector(direction, newDistance);
+          needsRender = true;
         } else if (currentDistance !== targetDistance) {
           const direction = new THREE.Vector3().subVectors(cam.position, ctrl.target).normalize();
           
           programmaticChange = true;
           isProgrammaticRef.current = true;
           cam.position.copy(ctrl.target).addScaledVector(direction, targetDistance);
+          needsRender = true;
         }
-        
-        ctrl.update();
         
         if (programmaticChange) {
           isProgrammaticRef.current = false;
         }
 
         // Physics calculation for the inertia fabric swing effect
-        const now = performance.now();
-        const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1); // clamp to max 100ms
-        lastTimeRef.current = now;
-
         const currentAngle = Math.atan2(cam.position.x - ctrl.target.x, cam.position.z - ctrl.target.z) - (modelGroup ? modelGroup.rotation.y : 0);
         let angleDiff = currentAngle - lastAngleRef.current;
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
@@ -395,6 +416,11 @@ export function GarmentPreview3D({
         inertiaDisplacementRef.current += inertiaVelocityRef.current * deltaTime;
         inertiaDisplacementRef.current = THREE.MathUtils.clamp(inertiaDisplacementRef.current, -0.2, 0.2);
 
+        // If the physics has not settled, we need to keep rendering to show the swing animation
+        if (Math.abs(inertiaDisplacementRef.current) > 0.0005 || Math.abs(inertiaVelocityRef.current) > 0.0005) {
+          needsRender = true;
+        }
+
         // Update uniforms
         shaderUniformsRef.current.forEach((uni) => {
           if (uni.uInertia) {
@@ -403,7 +429,13 @@ export function GarmentPreview3D({
         });
       }
 
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      // Check if a render was explicitly requested
+      if (renderRequestedRef.current) {
+        needsRender = true;
+        renderRequestedRef.current = false;
+      }
+
+      if (needsRender && rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
     };
@@ -415,6 +447,7 @@ export function GarmentPreview3D({
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
+      requestRender();
     };
     window.addEventListener('resize', handleResize);
 
@@ -438,7 +471,7 @@ export function GarmentPreview3D({
       dirLight2Ref.current = null;
       spotLightRef.current = null;
     };
-  }, []);
+  }, [requestRender]);
 
   // 1.1. Dynamic Lighting Presets Effect
   useEffect(() => {
@@ -539,12 +572,17 @@ export function GarmentPreview3D({
       spot.penumbra = 0.8;
       spot.decay = 1.8;
     }
-  }, [lightingPreset]);
+    if (rendererRef.current) {
+      rendererRef.current.shadowMap.needsUpdate = true;
+    }
+    requestRender();
+  }, [lightingPreset, requestRender]);
 
   useEffect(() => {
     textureTransformRef.current = { repeatSize, offsetX, offsetY };
     applyTextureTransform(textureRef.current, repeatSize, offsetX, offsetY);
-  }, [repeatSize, offsetX, offsetY]);
+    requestRender();
+  }, [repeatSize, offsetX, offsetY, requestRender]);
 
   // 1.2. Dynamic Material Presets Effect
   useEffect(() => {
@@ -605,7 +643,11 @@ export function GarmentPreview3D({
       if (uni.uWeaveType) uni.uWeaveType.value = settings.uWeaveType;
       if (uni.uBleedThrough) uni.uBleedThrough.value = settings.uBleedThrough;
     });
-  }, [materialPreset, loading]);
+    if (rendererRef.current) {
+      rendererRef.current.shadowMap.needsUpdate = true;
+    }
+    requestRender();
+  }, [materialPreset, loading, requestRender]);
 
   // Keep a ref of applyPatternTexture so the model loading effect doesn't re-trigger on image changes
   const applyPatternTextureRef = useRef(applyPatternTexture);
@@ -786,11 +828,15 @@ export function GarmentPreview3D({
                   physicalMat.side = THREE.DoubleSide;
 
                   // Setup custom uniforms for this material instance
+                  // Midikleid: Muster soll auf der Innenseite etwas staerker durchscheinen
+                  const isMidiDress =
+                    modelUrl.toLowerCase().includes('midi-dress') ||
+                    modelUrl.toLowerCase().includes('midikleid');
                   const customUniforms = {
                     uWeaveScale: { value: 4000.0 },
                     uWeaveWeight: { value: 0.01 },
                     uWeaveType: { value: 0.0 },
-                    uBleedThrough: { value: 0.18 },
+                    uBleedThrough: { value: isMidiDress ? 0.32 : 0.18 },
                     uInertia: { value: 0.0 },
                     uMinY: { value: localMinY },
                     uMaxY: { value: localMaxY }
@@ -1013,6 +1059,10 @@ export function GarmentPreview3D({
 
         // Apply texture immediately after loading the model
         applyPatternTextureRef.current();
+        if (rendererRef.current) {
+          rendererRef.current.shadowMap.needsUpdate = true;
+        }
+        requestRender();
       },
       undefined,
       (err) => {
@@ -1021,7 +1071,7 @@ export function GarmentPreview3D({
         setLoading(false);
       }
     );
-  }, [modelUrl]);
+  }, [modelUrl, requestRender]);
 
   // 3. Update texture mapping when image, repeatSize, or imageFilter changes
   useEffect(() => {
@@ -1052,7 +1102,8 @@ export function GarmentPreview3D({
         }
       }
     });
-  }, [showMannequin, loading]);
+    requestRender();
+  }, [showMannequin, loading, requestRender]);
 
   // 4. Update OrbitControls drag action based on active previewTool
   useEffect(() => {
@@ -1079,13 +1130,15 @@ export function GarmentPreview3D({
       cameraRef.current.position.set(0, 0, 2.4);
       controlsRef.current.update();
       onResetCompleted();
+      requestRender();
     }
-  }, [resetTrigger, onResetCompleted]);
+  }, [resetTrigger, onResetCompleted, requestRender]);
 
   // 6. Sync camera distance from zoom prop (Slider -> 3D Camera)
   useEffect(() => {
     targetDistanceRef.current = zoomToDistance(zoom);
-  }, [zoom]);
+    requestRender();
+  }, [zoom, requestRender]);
 
   // 7. Sync zoom state from camera distance (3D Interaction -> Slider)
   useEffect(() => {
@@ -1094,6 +1147,7 @@ export function GarmentPreview3D({
     if (!controls || !camera) return;
 
     const handleControlsChange = () => {
+      requestRender();
       if (isProgrammaticRef.current) return;
       const distance = camera.position.distanceTo(controls.target);
       const computedZoom = Number(distanceToZoom(distance).toFixed(2));
@@ -1105,7 +1159,7 @@ export function GarmentPreview3D({
 
     controls.addEventListener('change', handleControlsChange);
     return () => controls.removeEventListener('change', handleControlsChange);
-  }, [zoom, onZoomChange]);
+  }, [zoom, onZoomChange, requestRender]);
 
   // 8. Handle click-to-zoom in 3D
   useEffect(() => {
