@@ -930,7 +930,9 @@ function App() {
     return 'kleid';
   });
   const [showMannequin, setShowMannequin] = useState<boolean>(() => restored?.showMannequin ?? true);
-  const [materialPreset, setMaterialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
+  // Stoffart-Umschaltung ist aktuell aus der UI ausgeblendet, daher kein Setter.
+  // Wert bleibt als State erhalten (Default 'standard'); zum Reaktivieren Setter ergaenzen.
+  const [materialPreset] = useState<'standard' | 'linen' | 'silk' | 'sport'>(
     () => restored?.materialPreset ?? 'standard'
   );
   const [lightingPreset, setLightingPreset] = useState<'standard' | 'showroom' | 'sunset' | 'neon'>(
@@ -2024,45 +2026,9 @@ function App() {
                   3D-Präsentation
                 </span>
               </div>
-              <div className="control" style={{ gap: '6px' }}>
-                <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
-                  Stoffart
-                </span>
-                <div className="segmented segmented-premium" style={{ width: '100%' }}>
-                  <button
-                    className={materialPreset === 'standard' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setMaterialPreset('standard')}
-                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    className={materialPreset === 'silk' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setMaterialPreset('silk')}
-                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
-                  >
-                    Seide
-                  </button>
-                  <button
-                    className={materialPreset === 'linen' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setMaterialPreset('linen')}
-                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
-                  >
-                    Leinen
-                  </button>
-                  <button
-                    className={materialPreset === 'sport' ? 'active' : ''}
-                    type="button"
-                    onClick={() => setMaterialPreset('sport')}
-                    style={{ flex: 1, fontSize: '0.76rem', padding: '0 8px', minHeight: '32px' }}
-                  >
-                    Sport
-                  </button>
-                </div>
-              </div>
+              {/* Stoffart-Auswahl (materialPreset) ist bewusst ausgeblendet, bis die
+                  Materialdarstellung ueberzeugt. State/Typ/Uebergabe bleiben erhalten,
+                  damit sie ohne Umbau reaktivierbar ist. */}
               <div className="control" style={{ gap: '6px' }}>
                 <span className="control-label-row" style={{ fontSize: '0.8rem', fontWeight: 550, color: 'var(--muted)' }}>
                   Lichtstimmung
