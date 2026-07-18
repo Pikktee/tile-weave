@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  Copy,
   Download,
   GitBranch,
   Grid,
@@ -11,12 +12,14 @@ import {
   Layers3,
   Lightbulb,
   Move,
+  Palette,
   RotateCcw,
   Ruler,
   SendHorizontal,
   Shirt,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   TriangleAlert,
   Wand2,
   X,
@@ -132,6 +135,37 @@ const startPromptTooltip =
   'Hier beschreibst du in einfachen Worten, wie dein Stoffmuster aussehen soll, zum Beispiel Motive, Farben oder die Stimmung.';
 const startModelTooltip =
   'Hier wählst du aus, welche Bild-KI dein Muster erstellt. Die Auswahl beeinflusst vor allem, wie nahtlos und detailreich das Ergebnis wirken kann.';
+const paletteTooltip =
+  'Aus der erzeugten Kachel analysierte Hauptfarben – zur Orientierung, nicht farbverbindlich. Ein Klick kopiert den Hex-Wert.';
+const tileBordersTooltip =
+  'Blendet die Hilfslinien an den Kachelrändern ein oder aus. Ohne Linien siehst du die Nahtstellen so, wie sie im Rapport tatsächlich aufeinandertreffen.';
+
+// Klickbare Beispielideen fuer den Startscreen: senken die Einstiegshuerde, indem sie
+// zeigen, wie eine gute Musterbeschreibung aussieht (Motiv + Stil + Farben).
+const promptIdeas: { label: string; prompt: string }[] = [
+  {
+    label: 'Wildblumenwiese',
+    prompt:
+      'Handgezeichnete Wildblumenwiese mit Margeriten und Kornblumen, luftig verteilt, Creme, Salbeigrün und ein Hauch Koralle',
+  },
+  {
+    label: 'Art déco',
+    prompt: 'Geometrisches Art-déco-Muster mit Fächern und Bögen, elegante klare Linien, Gold auf Nachtblau',
+  },
+  {
+    label: 'Koi & Wellen',
+    prompt:
+      'Japanische Wellen mit Koi-Karpfen, fließende Linien, Indigoblau und Weiß mit goldenen Akzenten',
+  },
+  {
+    label: 'Zitrusfrüchte',
+    prompt:
+      'Aufgeschnittene Zitronen und Orangen mit Blättern, sommerlich frisch, Gelb, Orange und Blattgrün auf Creme',
+  },
+];
+
+// Mindestlaenge fuer den Start-Prompt; darunter bleibt der Erzeugen-Button deaktiviert.
+const minPromptLength = 8;
 
 // URL-Routing: jede Ansicht hat einen eigenen Pfad, damit Reload und
 // Zurueck/Vor des Browsers die richtige Ansicht treffen. Die Startseite ist '/'.
@@ -174,6 +208,7 @@ type SessionSnapshot = {
   showMannequin?: boolean;
   materialPreset?: 'standard' | 'linen' | 'silk' | 'sport';
   lightingPreset?: 'standard' | 'showroom' | 'sunset' | 'neon';
+  showTileBorders?: boolean;
 };
 
 const loadSession = (): SessionSnapshot | null => {
@@ -317,6 +352,40 @@ const downloadImage = (imageUrl: string, filename: string) => {
   link.href = imageUrl;
   link.download = filename;
   link.click();
+};
+
+// Naechster freier Variantenname: hoechste vorhandene Nummer + 1, damit nach dem
+// Entfernen von Varianten keine doppelten Namen entstehen (length + 1 wuerde das tun).
+const nextVersionName = (list: Version[]) => {
+  const maxNumber = list.reduce((max, version) => {
+    const match = version.name.match(/(\d+)\s*$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `Variante ${maxNumber + 1}`;
+};
+
+const copyTextToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Fallback ueber ein temporaeres Textfeld, wenn die Clipboard-API nicht
+    // verfuegbar oder nicht erlaubt ist (z. B. unsicherer Kontext im LAN).
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      return copied;
+    } catch {
+      return false;
+    }
+  }
 };
 
 const readJsonResponse = async (response: Response) => {
@@ -963,6 +1032,46 @@ function App() {
     isImageModelKey(restored?.imageModel) ? restored!.imageModel : defaultImageModel,
   );
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
+  // Hilfslinien an den Kachelgrenzen der Nahtpruefung; ausblendbar, um die Naht
+  // unverdeckt zu beurteilen (die Linien liegen genau auf den Stosskanten).
+  const [showTileBorders, setShowTileBorders] = useState<boolean>(() => restored?.showTileBorders ?? true);
+  // Kurzes "Kopiert"-Feedback fuer Farbwelt-Swatches und Prompt-Kopierbutton.
+  const [copiedColor, setCopiedColor] = useState<string | null>(null);
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+
+  const flashCopyFeedback = (apply: () => void) => {
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    apply();
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopiedColor(null);
+      setCopiedPromptId(null);
+      copyFeedbackTimerRef.current = null;
+    }, 1500);
+  };
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const copyPaletteColor = async (color: string) => {
+    if (await copyTextToClipboard(color)) {
+      flashCopyFeedback(() => setCopiedColor(color));
+    }
+  };
+
+  const copyVersionPrompt = async (version: Version) => {
+    if (await copyTextToClipboard(version.prompt)) {
+      flashCopyFeedback(() => setCopiedPromptId(version.id));
+    }
+  };
 
   // States for 3D Custom models and OrbitControls reset
   const [customModelUrl, setCustomModelUrl] = useState<string | null>(null);
@@ -1116,6 +1225,7 @@ function App() {
       showMannequin,
       materialPreset,
       lightingPreset,
+      showTileBorders,
     });
   }, [
     tileImage,
@@ -1133,6 +1243,7 @@ function App() {
     showMannequin,
     materialPreset,
     lightingPreset,
+    showTileBorders,
   ]);
 
   const updateSetting = <K extends keyof PatternSettings>(key: K, value: PatternSettings[K]) => {
@@ -1474,6 +1585,54 @@ function App() {
     setVersions((current) => current.filter((version) => version.id !== id));
   };
 
+  // Anzahl fertiger Varianten (ohne pending/error); steuert, ob Loeschen angeboten wird.
+  const finishedVersionCount = versions.filter((version) => !version.status).length;
+
+  // Entfernt eine fertige Variante. Die letzte fertige Variante bleibt geschuetzt,
+  // damit immer eine nutzbare Kachel uebrig ist. War die Variante aktiv, wird die
+  // naechste fertige Variante uebernommen.
+  const deleteVersion = (id: string) => {
+    const target = versions.find((version) => version.id === id);
+    if (!target || target.status) return;
+
+    const remaining = versions.filter((version) => version.id !== id);
+    if (activeVersionId === id) {
+      const fallback = remaining.find((version) => !version.status && version.image);
+      if (!fallback) return;
+      restoreVersion(fallback);
+    }
+    setVersions(remaining);
+    if (expandedVersionId === id) {
+      setExpandedVersionId(null);
+    }
+  };
+
+  const hasImageAdjustments =
+    imageAdjustments.brightness !== 0 || imageAdjustments.contrast !== 0 || imageAdjustments.saturation !== 0;
+
+  const resetImageAdjustments = () => {
+    setImageAdjustments(initialImageAdjustments);
+    if (activeVersionId) {
+      setVersions((currentVersions) =>
+        currentVersions.map((v) =>
+          v.id === activeVersionId ? { ...v, imageAdjustments: initialImageAdjustments } : v,
+        ),
+      );
+    }
+  };
+
+  // Export-Dateiname mit Variantenbezug, damit mehrere Exporte unterscheidbar bleiben.
+  const exportFilename = () => {
+    const active = versions.find((version) => version.id === activeVersionId);
+    const slug = active
+      ? active.name
+          .toLowerCase()
+          .replace(/[^a-z0-9äöüß]+/gi, '-')
+          .replace(/^-+|-+$/g, '')
+      : '';
+    return `tile-weave-${slug || 'musterkachel'}.png`;
+  };
+
   const resetToStart = () => {
     setTileImage('');
     setPrompt('');
@@ -1490,6 +1649,7 @@ function App() {
     setImageAdjustments(initialImageAdjustments);
     setOffsetX(50);
     setOffsetY(50);
+    setShowTileBorders(true);
     setGarmentType('kleid');
     if (customModelUrl) {
       URL.revokeObjectURL(customModelUrl);
@@ -1577,7 +1737,7 @@ function App() {
       setVersions((current) => [
         {
           id: nextVersionId,
-          name: `Variante ${current.length + 1}`,
+          name: nextVersionName(current),
           image: data.imageUrl,
           settings: nextSettings,
           prompt: finalPrompt,
@@ -1625,7 +1785,7 @@ function App() {
     setVersions((current) => [
       {
         id: placeholderId,
-        name: `Variante ${current.length + 1}`,
+        name: nextVersionName(current),
         image: '',
         settings: baseSettings,
         prompt: requestPrompt,
@@ -1731,7 +1891,7 @@ function App() {
 
   const handleStartSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isGenerating && prompt.trim().length >= 8) {
+    if (!isGenerating && prompt.trim().length >= minPromptLength) {
       setPreviewTransform(initialPanZoom);
       void generateWithAi('initial');
     }
@@ -1788,6 +1948,30 @@ function App() {
                 </span>
               </label>
               <PromptInput value={prompt} onChange={setPrompt} />
+              <div className="prompt-ideas" aria-label="Beispielideen für Musterbeschreibungen">
+                <span className="prompt-ideas__label">
+                  <Sparkles size={13} aria-hidden="true" />
+                  Inspiration:
+                </span>
+                {promptIdeas.map((idea) => (
+                  <button
+                    key={idea.label}
+                    type="button"
+                    className="prompt-idea-chip"
+                    onClick={() => setPrompt(idea.prompt)}
+                    disabled={isGenerating}
+                    title={idea.prompt}
+                  >
+                    {idea.label}
+                  </button>
+                ))}
+              </div>
+              {prompt.trim().length > 0 && prompt.trim().length < minPromptLength && (
+                <p className="start-hint" aria-live="polite">
+                  Beschreibe deine Idee mit mindestens {minPromptLength} Zeichen, damit ein Muster entstehen
+                  kann.
+                </p>
+              )}
             </div>
 
             <div className="model-field">
@@ -1839,7 +2023,7 @@ function App() {
             <button
               className="primary-button start-submit"
               type="submit"
-              disabled={isGenerating || prompt.trim().length < 8}
+              disabled={isGenerating || prompt.trim().length < minPromptLength}
             >
               <Wand2 size={18} />
               Stoffmuster erzeugen
@@ -1920,7 +2104,7 @@ function App() {
           <button
             className="ghost-button"
             type="button"
-            onClick={() => downloadImage(tileImage, 'tile-weave-musterkachel.png')}
+            onClick={() => downloadImage(tileImage, exportFilename())}
             disabled={!hasTile}
           >
             <Download size={17} />
@@ -1950,6 +2134,17 @@ function App() {
                   </span>
                 </span>
               </span>
+              {hasImageAdjustments && (
+                <button
+                  type="button"
+                  className="block-reset"
+                  onClick={resetImageAdjustments}
+                  title="Bildeinstellungen auf Neutral zurücksetzen"
+                >
+                  <RotateCcw size={13} aria-hidden="true" />
+                  Zurücksetzen
+                </button>
+              )}
             </div>
             <Slider
               label="Helligkeit"
@@ -1976,6 +2171,36 @@ function App() {
               onChange={(value) => updateImageAdjustment('saturation', value)}
             />
           </div>
+
+          {viewMode === 'kachel' && (
+            <div className="refinement-block">
+              <div className="label-row">
+                <span>
+                  <Grid size={16} />
+                  Nahtprüfung
+                  <span className="control-tooltip control-tooltip--below" tabIndex={0} aria-label={tileBordersTooltip}>
+                    <CircleHelp size={14} />
+                    <span className="control-tooltip-popup" role="tooltip">
+                      {tileBordersTooltip}
+                    </span>
+                  </span>
+                </span>
+              </div>
+              <div className="mannequin-toggle-container">
+                <label className="mannequin-toggle-label">
+                  <span>Kachelgrenzen anzeigen</span>
+                  <div className="switch">
+                    <input
+                      type="checkbox"
+                      checked={showTileBorders}
+                      onChange={(event) => setShowTileBorders(event.target.checked)}
+                    />
+                    <span className="slider-toggle" />
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
 
           {viewMode !== 'kachel' && (
             <div className="refinement-block">
@@ -2004,6 +2229,7 @@ function App() {
               <Slider
                 label="Horizontaler Versatz"
                 value={offsetX}
+                unit=" %"
                 hint="Verschiebt das Muster horizontal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
                 disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
                 onChange={updateOffsetX}
@@ -2011,6 +2237,7 @@ function App() {
               <Slider
                 label="Vertikaler Versatz"
                 value={offsetY}
+                unit=" %"
                 hint="Verschiebt das Muster vertikal – in der Stoffbahn- und Kleidung-Ansicht aktiv."
                 disabled={viewMode !== 'stoffbahn' && viewMode !== 'kleidung'}
                 onChange={updateOffsetY}
@@ -2379,7 +2606,7 @@ function App() {
                         <span className="tile-card-title">Nahtprüfung</span>
                       </div>
                     </div>
-                    <div className="tile-repeat-grid">
+                    <div className={showTileBorders ? 'tile-repeat-grid' : 'tile-repeat-grid borders-hidden'}>
                       <span className="tile-repeat-pattern" style={makeTileStyle(tileImage, imageFilter)} />
                     </div>
                   </article>
@@ -2496,6 +2723,9 @@ function App() {
 
               const isExpanded = expandedVersionId === version.id;
               const isActive = activeVersionId === version.id;
+              // Palette der jeweiligen Variante (nicht die globale): so bleiben Varianten
+              // farblich vergleichbar. Defensiv, weil die Daten aus sessionStorage kommen.
+              const versionColors = version.settings?.colors ?? [];
               return (
                 <div
                   key={version.id}
@@ -2508,30 +2738,107 @@ function App() {
                     <span className="version-thumb" style={{ backgroundImage: `url(${version.image})` }} />
                     <span>
                       <strong>{version.name}</strong>
+                      {version.note && <small title={version.note}>{version.note}</small>}
                     </span>
-                    <span
-                      className="version-info-toggle"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={isExpanded ? "Prompt-Details ausblenden" : "Prompt-Details anzeigen"}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setExpandedVersionId(isExpanded ? null : version.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
+                    <span className="version-actions">
+                      {finishedVersionCount > 1 && (
+                        <span
+                          className="version-delete"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${version.name} entfernen`}
+                          title="Variante entfernen"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            deleteVersion(version.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              deleteVersion(version.id);
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </span>
+                      )}
+                      <span
+                        className="version-info-toggle"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={isExpanded ? "Prompt-Details ausblenden" : "Prompt-Details anzeigen"}
+                        onClick={(event) => {
                           event.stopPropagation();
                           setExpandedVersionId(isExpanded ? null : version.id);
-                        }
-                      }}
-                    >
-                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setExpandedVersionId(isExpanded ? null : version.id);
+                          }
+                        }}
+                      >
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </span>
                     </span>
                   </button>
                   {isExpanded && (
                     <div className="version-prompt-detail">
                       <p>{version.prompt}</p>
+                      <button
+                        type="button"
+                        className="version-copy-prompt"
+                        onClick={() => void copyVersionPrompt(version)}
+                        title="Exakten englischen Prompt in die Zwischenablage kopieren"
+                      >
+                        {copiedPromptId === version.id ? (
+                          <Check size={13} aria-hidden="true" />
+                        ) : (
+                          <Copy size={13} aria-hidden="true" />
+                        )}
+                        {copiedPromptId === version.id ? 'Kopiert!' : 'Prompt kopieren'}
+                      </button>
+                      {versionColors.length > 0 && (
+                        <div className="version-palette">
+                          <span className="version-palette__label">
+                            <Palette size={13} aria-hidden="true" />
+                            Farbwelt
+                            <span
+                              className="control-tooltip control-tooltip--below"
+                              tabIndex={0}
+                              aria-label={paletteTooltip}
+                            >
+                              <CircleHelp size={13} />
+                              <span className="control-tooltip-popup" role="tooltip">
+                                {paletteTooltip}
+                              </span>
+                            </span>
+                          </span>
+                          <ul className="palette-swatches" aria-label={`Hauptfarben von ${version.name}`}>
+                            {versionColors.map((color) => (
+                              <li key={color}>
+                                <button
+                                  type="button"
+                                  className={copiedColor === color ? 'palette-swatch copied' : 'palette-swatch'}
+                                  onClick={() => void copyPaletteColor(color)}
+                                  title={`${color} in die Zwischenablage kopieren`}
+                                >
+                                  <span
+                                    className="palette-swatch__chip"
+                                    style={{ backgroundColor: color }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="palette-swatch__hex">
+                                    {copiedColor === color ? 'Kopiert!' : color}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

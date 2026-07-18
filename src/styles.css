@@ -609,6 +609,57 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+/* Klickbare Beispielideen unter dem Prompt-Feld */
+.prompt-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 2px;
+}
+
+.prompt-ideas__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.prompt-ideas__label svg {
+  color: var(--teal);
+}
+
+.prompt-idea-chip {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  font-weight: 550;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.prompt-idea-chip:hover:not(:disabled) {
+  border-color: rgba(33, 168, 163, 0.45);
+  background: rgba(33, 168, 163, 0.1);
+}
+
+.start-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .start-legal-links,
 .legal-links {
   display: flex;
@@ -747,6 +798,44 @@ textarea:focus-visible {
 .refinement-shell .preview-stage {
   height: 100%;
   min-height: 0;
+}
+
+/* Bei niedrigen Fenstern passt der Inhalt des Anpassungen-Panels nicht mehr in die
+   Viewport-hohe Grid-Zeile. Dann intern scrollen, statt Controls unerreichbar unter
+   der Panelkante zu verlieren. Nur im Desktop-Grid noetig (unter 1181px hat das
+   Panel automatische Hoehe). Der Scroll-Container clippt absolute Popups, deshalb
+   werden die Tooltips hier an der vollen Zeilenbreite ausgerichtet statt am Icon. */
+@media (min-width: 1181px) and (max-height: 980px) {
+  .refinement-shell .controls-panel {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .refinement-shell .controls-panel .label-row,
+  .refinement-shell .controls-panel .control-label-row {
+    position: relative;
+  }
+
+  .refinement-shell .controls-panel .control-tooltip,
+  .refinement-shell .controls-panel .control-label {
+    position: static;
+  }
+
+  .refinement-shell .controls-panel .control-tooltip-popup {
+    left: 0;
+    right: auto;
+    max-width: 100%;
+    transform: translateY(4px);
+  }
+
+  .refinement-shell .controls-panel .control-tooltip:hover .control-tooltip-popup,
+  .refinement-shell .controls-panel .control-tooltip:focus-visible .control-tooltip-popup {
+    transform: translateY(0);
+  }
+
+  .refinement-shell .controls-panel .control-tooltip-popup::after {
+    display: none;
+  }
 }
 
 .panel-heading {
@@ -962,6 +1051,19 @@ h2 {
   left: calc(100% - 23px);
 }
 
+/* Im Detail-Panel der Variante am Icon ausrichten: die Zeile ist schmal, ein an
+   der Panelkante ausgerichtetes Popup wuerde ueber die Karte hinausragen. */
+.version-palette .control-tooltip--below .control-tooltip-popup {
+  right: auto;
+  left: -14px;
+  width: max-content;
+  max-width: 200px;
+}
+
+.version-palette .control-tooltip--below .control-tooltip-popup::after {
+  left: 23px;
+}
+
 input[type="range"] {
   width: 100%;
   accent-color: var(--teal);
@@ -1052,6 +1154,28 @@ input[type="range"] {
   pointer-events: none;
 }
 
+/* Kleiner Zuruecksetzen-Button rechts in einer Block-Ueberschrift */
+.block-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.block-reset:hover {
+  color: var(--ink);
+  background: rgba(25, 23, 22, 0.06);
+}
+
+
 .prompt-chat-form {
   display: grid;
   gap: 8px;
@@ -1105,9 +1229,12 @@ input[type="range"] {
   position: relative;
   z-index: 2;
   display: flex;
+  /* Umbruch erlauben: bei schmaler Stage rutschen die Werkzeuge unter den Titel,
+     statt rechts aus der Stage hinauszulaufen (unerreichbar unter dem Seitenpanel). */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px 16px;
   padding: 15px 22px 12px;
 }
 
@@ -1906,6 +2033,13 @@ input[type="range"] {
     linear-gradient(90deg, transparent calc(33.333% - 1px), rgba(255, 252, 246, 0.9) calc(33.333% - 1px) 33.333%, transparent 33.333% calc(66.666% - 1px), rgba(255, 252, 246, 0.9) calc(66.666% - 1px) 66.666%, transparent 66.666%),
     linear-gradient(0deg, transparent calc(33.333% - 1px), rgba(255, 252, 246, 0.9) calc(33.333% - 1px) 33.333%, transparent 33.333% calc(66.666% - 1px), rgba(255, 252, 246, 0.9) calc(66.666% - 1px) 66.666%, transparent 66.666%);
   pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+/* Hilfslinien ausblendbar: die 1px-Linien liegen genau auf den Stosskanten und
+   verdecken sonst die Naht, die hier beurteilt werden soll. */
+.tile-repeat-grid.borders-hidden::after {
+  opacity: 0;
 }
 
 .version-meta {
@@ -2091,25 +2225,6 @@ input[type="range"] {
   line-height: 1.45;
 }
 
-.versions button {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 7px;
-  color: var(--ink);
-  text-align: left;
-  background: rgba(255, 255, 255, 0.54);
-}
-
-.versions button.active {
-  border-color: var(--dark);
-  background: #fff;
-  box-shadow: inset 0 0 0 2px var(--dark);
-}
 
 .version-item-wrapper {
   display: flex;
@@ -2132,15 +2247,34 @@ input[type="range"] {
   box-shadow: inset 0 0 0 1px rgba(25, 23, 22, 0.35);
 }
 
-.version-item-wrapper button {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+/* Zeilen-Button (Thumbnail + Name + Aktionen). Bewusst nur direkte Kinder: das
+   aufgeklappte Detail-Panel enthaelt eigene Buttons (Prompt kopieren, Farb-Swatches),
+   die dieses Listen-Raster nicht erben duerfen. Rahmen und Flaeche liefert der
+   Wrapper, der Button selbst bleibt transparent. */
+.version-item-wrapper > button {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
   width: 100%;
+  min-width: 0;
+  border: none;
   border-radius: 0;
+  padding: 7px;
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  box-shadow: none;
 }
 
-.version-info-toggle {
+.version-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.version-info-toggle,
+.version-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2150,11 +2284,41 @@ input[type="range"] {
   color: var(--teal);
   cursor: pointer;
   outline: none;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .version-info-toggle:hover {
   background: rgba(33, 168, 163, 0.035);
+}
+
+/* Loeschen erst beim Ueberfahren/Fokussieren der Variante einblenden, damit die
+   Liste ruhig bleibt; auf Touch-Geraeten (kein Hover) immer sichtbar. */
+.version-delete {
+  color: var(--muted);
+  opacity: 0;
+}
+
+.version-item-wrapper:hover .version-delete,
+.version-item-wrapper:focus-within .version-delete {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .version-delete {
+    opacity: 1;
+  }
+}
+
+.version-delete:hover,
+.version-delete:focus-visible {
+  color: var(--coral);
+  background: rgba(244, 91, 105, 0.12);
+}
+
+.version-info-toggle:focus-visible,
+.version-delete:focus-visible {
+  outline: 2px solid rgba(33, 168, 163, 0.6);
+  outline-offset: 1px;
 }
 
 .version-item-wrapper.expanded {
@@ -2168,8 +2332,10 @@ input[type="range"] {
   color: #fff;
 }
 
+/* Detail-Panel nutzt die volle Kartenbreite (kein Einzug unter dem Thumbnail):
+   das schmale Panel bietet sonst zu wenig Platz fuer Prompt-Text und Swatches. */
 .version-prompt-detail {
-  padding: 2px 12px 12px 73px;
+  padding: 2px 14px 14px;
   font-size: 0.78rem;
   color: var(--muted);
   line-height: 1.45;
@@ -2182,6 +2348,108 @@ input[type="range"] {
   word-break: break-word;
   white-space: normal;
   text-transform: none;
+}
+
+.version-copy-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.74rem;
+  font-weight: 600;
+  transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.version-copy-prompt:hover {
+  color: var(--ink);
+  border-color: rgba(33, 168, 163, 0.45);
+  background: rgba(33, 168, 163, 0.08);
+}
+
+/* Farbwelt der Variante: aus ihrer Kachel analysierte Hauptfarben.
+   Steht bewusst hier im Detail-Panel (Fakten zu dieser Variante) und nicht im
+   Anpassungen-Panel, das ausschliesslich veraendernde Controls enthaelt. */
+.version-palette {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.version-palette__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.version-palette__label > svg {
+  color: var(--teal);
+}
+
+.palette-swatches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.palette-swatch {
+  display: flex;
+  width: 100%;
+  min-height: 28px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 4px 7px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.palette-swatch:hover {
+  border-color: rgba(25, 23, 22, 0.28);
+  background: #fff;
+}
+
+.palette-swatch.copied {
+  border-color: rgba(33, 168, 163, 0.55);
+  background: rgba(33, 168, 163, 0.08);
+}
+
+.palette-swatch__chip {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(25, 23, 22, 0.14);
+}
+
+.palette-swatch__hex {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-swatch.copied .palette-swatch__hex {
+  color: var(--teal);
+  font-weight: 700;
 }
 
 @keyframes slideDown {
@@ -2342,10 +2610,6 @@ input[type="range"] {
 
   .preview-stage {
     min-height: 620px;
-  }
-
-  .preview-header {
-    grid-template-columns: 1fr;
   }
 
   .preview-tools {
